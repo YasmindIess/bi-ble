@@ -17,11 +17,14 @@ import {
 export type EditorTool = "select" | "connect";
 
 interface NodeMoveResult {
+  fromX: number;
+  fromY: number;
   x: number;
   y: number;
   deltaX: number;
   deltaY: number;
   pointerDistance: number;
+  durationMs: number;
 }
 
 interface FormulaCanvasProps {
@@ -48,6 +51,9 @@ interface DragPreview {
   startClientY: number;
   startNodeX: number;
   startNodeY: number;
+  startedAtMs: number;
+  lastClientX: number;
+  lastClientY: number;
   x: number;
   y: number;
   pointerDistance: number;
@@ -163,6 +169,9 @@ export function FormulaCanvas({
       startClientY: event.clientY,
       startNodeX: node.x,
       startNodeY: node.y,
+      startedAtMs: performance.now(),
+      lastClientX: event.clientX,
+      lastClientY: event.clientY,
       x: node.x,
       y: node.y,
       pointerDistance: 0
@@ -207,17 +216,31 @@ export function FormulaCanvas({
       dragPreview.startNodeY + deltaY
     );
 
+    const segmentCanvasX =
+      (event.clientX - dragPreview.lastClientX) *
+      scale.x;
+
+    const segmentCanvasY =
+      (event.clientY - dragPreview.lastClientY) *
+      scale.y;
+
+    const segmentDistance = Math.hypot(
+      segmentCanvasX,
+      segmentCanvasY
+    );
+
     setDragPreview((current) =>
       current === null
         ? null
         : {
             ...current,
+            lastClientX: event.clientX,
+            lastClientY: event.clientY,
             x: nextPosition.x,
             y: nextPosition.y,
-            pointerDistance: Math.hypot(
-              deltaClientX,
-              deltaClientY
-            )
+            pointerDistance:
+              current.pointerDistance +
+              segmentDistance
           }
     );
   };
@@ -251,6 +274,8 @@ export function FormulaCanvas({
     const committedY = Math.round(dragPreview.y);
 
     const result: NodeMoveResult = {
+      fromX: dragPreview.startNodeX,
+      fromY: dragPreview.startNodeY,
       x: committedX,
       y: committedY,
       deltaX:
@@ -258,7 +283,10 @@ export function FormulaCanvas({
       deltaY:
         committedY - dragPreview.startNodeY,
       pointerDistance:
-        dragPreview.pointerDistance
+        dragPreview.pointerDistance,
+      durationMs:
+        performance.now() -
+        dragPreview.startedAtMs
     };
 
     const moved =

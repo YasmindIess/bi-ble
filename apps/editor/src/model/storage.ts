@@ -238,6 +238,11 @@ import {
   type HistoryState
 } from "./history";
 
+import {
+  createAuditState,
+  isAuditState
+} from "./audit";
+
 const SESSION_STORAGE_KEY =
   "bi-ble.editor.session.v1";
 
@@ -289,19 +294,29 @@ function isHistoryState(
   });
 }
 
-function isEditorSession(
+function normalizeEditorSession(
   value: unknown
-): value is EditorSession {
+): EditorSession | null {
   if (typeof value !== "object" || value === null) {
-    return false;
+    return null;
   }
 
   const candidate = value as Partial<EditorSession>;
 
-  return (
-    isEditorDocumentV2(candidate.document) &&
-    isHistoryState(candidate.history)
-  );
+  if (
+    !isEditorDocumentV2(candidate.document) ||
+    !isHistoryState(candidate.history)
+  ) {
+    return null;
+  }
+
+  return {
+    document: candidate.document,
+    history: candidate.history,
+    audit: isAuditState(candidate.audit)
+      ? candidate.audit
+      : createAuditState()
+  };
 }
 
 export function loadEditorSession():
@@ -314,8 +329,11 @@ export function loadEditorSession():
     if (serialized !== null) {
       const parsed: unknown = JSON.parse(serialized);
 
-      if (isEditorSession(parsed)) {
-        return parsed;
+      const normalizedSession =
+        normalizeEditorSession(parsed);
+
+      if (normalizedSession !== null) {
+        return normalizedSession;
       }
     }
 
@@ -327,7 +345,8 @@ export function loadEditorSession():
 
     return {
       document: existingDocument,
-      history: createHistoryState()
+      history: createHistoryState(),
+      audit: createAuditState()
     };
   } catch {
     return null;

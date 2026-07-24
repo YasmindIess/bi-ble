@@ -1,0 +1,130 @@
+.audit-panel {
+  overflow: auto;
+}
+
+.audit-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.audit-entry {
+  display: grid;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.audit-entry-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.audit-entry-heading div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.audit-entry-heading strong {
+  overflow: hidden;
+  color: #353c45;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audit-entry-heading span {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.audit-decision {
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  border-radius: 6px;
+  color: var(--safe) !important;
+  background: var(--safe-soft);
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.audit-fact-boundary,
+.audit-interpretation {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.audit-fact-boundary {
+  border: 1px solid #dfe3e8;
+  background: #fafbfc;
+}
+
+.audit-interpretation {
+  border: 1px dashed #dccfbf;
+  background: #fbf7f2;
+}
+
+.audit-section-label {
+  color: var(--quiet);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.audit-fact-boundary code {
+  color: #747d88;
+  font-size: 7px;
+}
+
+.audit-no-gesture {
+  color: var(--quiet);
+  font-size: 8px;
+}
+
+.audit-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 5px;
+}
+
+.audit-metric {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.audit-metric span,
+.audit-metric strong {
+  font-size: 7px;
+}
+
+.audit-metric span {
+  color: var(--muted);
+}
+
+.audit-metric strong {
+  color: #454d57;
+}
+
+.audit-interpretation p {
+  margin: 0;
+  color: #66594d;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.audit-interpretation small {
+  color: #978675;
+  font-size: 7px;
+}

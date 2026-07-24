@@ -9,6 +9,7 @@ import "./persistence.css";
 import "./connections.css";
 import "./history.css";
 import "./interaction.css";
+import "./audit.css";
 
 import {
   FormulaCanvas,
@@ -18,6 +19,10 @@ import {
 import {
   HistoryPanel
 } from "./components/HistoryPanel";
+
+import {
+  AuditPanel
+} from "./components/AuditPanel";
 
 import {
   paletteGroups,
@@ -56,6 +61,11 @@ import type {
   EditorOperation
 } from "./model/operations";
 
+import {
+  createAuditState,
+  type OperationAuditContext
+} from "./model/audit";
+
 interface ConnectionFeedback {
   kind: "ready" | "admitted" | "blocked";
   message: string;
@@ -66,11 +76,16 @@ function App() {
     () =>
       loadEditorSession() ?? {
         document: createEditorDocument(),
-        history: createHistoryState()
+        history: createHistoryState(),
+        audit: createAuditState()
       }
   );
 
-  const { document, history } = session;
+  const {
+    document,
+    history,
+    audit
+  } = session;
 
   const [selectedNodeId, setSelectedNodeId] =
     useState<string | null>(null);
@@ -103,12 +118,14 @@ function App() {
 
   const commitOperation = async (
     operation: EditorOperation,
-    label: string
+    label: string,
+    auditContext?: OperationAuditContext
   ) => {
     const nextSession = await commitEditorOperation(
       session,
       operation,
-      label
+      label,
+      auditContext
     );
 
     setSession(nextSession);
@@ -142,6 +159,9 @@ function App() {
       deltaX: number;
       deltaY: number;
       pointerDistance: number;
+      durationMs: number;
+      fromX: number;
+      fromY: number;
     }
   ) => {
     await commitOperation(
@@ -149,15 +169,28 @@ function App() {
         type: "node.move",
         nodeId: node.id,
         from: {
-          x: node.x,
-          y: node.y
+          x: result.fromX,
+          y: result.fromY
         },
         to: {
           x: result.x,
           y: result.y
         }
       },
-      `Move ${node.domain} ${node.label}`
+      `Move ${node.domain} ${node.label}`,
+      {
+        pointerGesture: {
+          kind: "pointer_drag",
+          durationMs: result.durationMs,
+          pointerTravel: result.pointerDistance,
+          finalDisplacement: Math.hypot(
+            result.deltaX,
+            result.deltaY
+          ),
+          deltaX: result.deltaX,
+          deltaY: result.deltaY
+        }
+      }
     );
 
     setSelectedNodeId(node.id);
@@ -629,23 +662,7 @@ function App() {
         <section className="bottom-dock">
           <HistoryPanel history={history} />
 
-          <article className="dock-panel">
-            <div className="dock-heading">
-              <div>
-                <span className="eyebrow">
-                  Operational evidence
-                </span>
-                <h2>Audit</h2>
-              </div>
-
-              <span className="panel-count">0</span>
-            </div>
-
-            <div className="dock-empty">
-              Incompatible connections are blocked visibly.
-              Receipts begin after operations exist.
-            </div>
-          </article>
+          <AuditPanel audit={audit} />
         </section>
       </main>
     </div>

@@ -1,4 +1,13 @@
-import type { EditorDocument } from "./document";
+import type {
+  EditorDocument
+} from "./document";
+
+import {
+  appendAuditReceipt,
+  createAuditReceipt,
+  type AuditState,
+  type OperationAuditContext
+} from "./audit";
 
 import {
   applyEditorOperation,
@@ -24,6 +33,7 @@ export interface HistoryState {
 export interface EditorSession {
   document: EditorDocument;
   history: HistoryState;
+  audit: AuditState;
 }
 
 export function createHistoryState(): HistoryState {
@@ -66,16 +76,20 @@ async function digestDocument(
   );
 
   return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .map((byte) =>
+      byte.toString(16).padStart(2, "0")
+    )
     .join("");
 }
 
 export async function commitEditorOperation(
   session: EditorSession,
   forward: EditorOperation,
-  label: string
+  label: string,
+  auditContext?: OperationAuditContext
 ): Promise<EditorSession> {
   const beforeDocument = session.document;
+
   const afterDocument = applyEditorOperation(
     beforeDocument,
     forward
@@ -93,22 +107,40 @@ export async function commitEditorOperation(
       session.history.cursor
     );
 
+  const createdAt = new Date().toISOString();
+
   const record: OperationRecord = {
     id: createId("operation"),
     label,
-    createdAt: new Date().toISOString(),
+    createdAt,
     forward,
     inverse: invertEditorOperation(forward),
     beforeDigest,
     afterDigest
   };
 
+  const receipt = createAuditReceipt({
+    operationId: record.id,
+    operationLabel: record.label,
+    operation: forward,
+    recordedAt: createdAt,
+    beforeDigest,
+    afterDigest,
+    context: auditContext
+  });
+
   return {
     document: afterDocument,
+
     history: {
       entries: [...retainedEntries, record],
       cursor: retainedEntries.length + 1
-    }
+    },
+
+    audit: appendAuditReceipt(
+      session.audit,
+      receipt
+    )
   };
 }
 
@@ -137,10 +169,13 @@ export function undoEditorSession(
     ];
 
   return {
+    ...session,
+
     document: applyEditorOperation(
       session.document,
       record.inverse
     ),
+
     history: {
       ...session.history,
       cursor: session.history.cursor - 1
@@ -161,10 +196,13 @@ export function redoEditorSession(
     ];
 
   return {
+    ...session,
+
     document: applyEditorOperation(
       session.document,
       record.forward
     ),
+
     history: {
       ...session.history,
       cursor: session.history.cursor + 1
