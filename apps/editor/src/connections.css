@@ -1,0 +1,144 @@
+.tool-button:not(:disabled) {
+  cursor: pointer;
+}
+
+.connection-feedback {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.feedback-ready {
+  color: #59626f;
+  background: #f3f4f6;
+}
+
+.feedback-admitted {
+  color: #32644f;
+  background: #e8f3ed;
+}
+
+.feedback-blocked {
+  color: #8a493d;
+  background: #f8ece9;
+}
+
+.formula-edge-line {
+  fill: none;
+  stroke: #6e7784;
+  stroke-width: 2;
+}
+
+.edge-arrow {
+  fill: #6e7784;
+}
+
+.formula-edge-label-background {
+  fill: rgba(255, 255, 255, 0.95);
+  stroke: #d5d9de;
+}
+
+.formula-edge-label {
+  fill: #68717d;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  font-size: 8px;
+  text-anchor: middle;
+}
+
+.formula-port {
+  outline: none;
+}
+
+.formula-port-hit-area {
+  fill: transparent;
+}
+
+.formula-port-visible {
+  fill: #ffffff;
+  stroke: #9ca4af;
+  stroke-width: 1.5;
+}
+
+.formula-port-label {
+  fill: #7e8792;
+  font-family: inherit;
+  font-size: 8px;
+  pointer-events: none;
+}
+
+.port-input .formula-port-label {
+  text-anchor: start;
+}
+
+.port-output .formula-port-label {
+  text-anchor: end;
+}
+
+.formula-port-connectable {
+  cursor: crosshair;
+}
+
+.formula-port-connectable:hover
+.formula-port-visible {
+  fill: #343e4c;
+  stroke: #343e4c;
+}
+
+.formula-port-pending
+.formula-port-visible {
+  fill: #755fa2;
+  stroke: #5e478c;
+  stroke-width: 2.5;
+}
+
+.inspector-port-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.inspector-port {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #fafbfc;
+  font-size: 9px;
+}
+
+.inspector-port code {
+  grid-column: 1 / 3;
+  overflow-wrap: anywhere;
+  color: #6f7782;
+  font-size: 8px;
+}
+
+.inspector-port-direction {
+  padding: 3px 5px;
+  border-radius: 5px;
+  color: #ffffff;
+  font-size: 7px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.direction-input {
+  background: #6b7481;
+}
+
+.direction-output {
+  background: #755fa2;
+}

@@ -6,6 +6,12 @@ import {
 
 import "./App.css";
 import "./persistence.css";
+import "./connections.css";
+
+import {
+  FormulaCanvas,
+  type EditorTool
+} from "./components/FormulaCanvas";
 
 import {
   paletteGroups,
@@ -14,14 +20,27 @@ import {
 
 import {
   createEditorDocument,
+  createFormulaEdge,
   createFormulaNode,
-  type EditorDocument
+  type EditorDocument,
+  type FormulaEndpoint,
+  type FormulaNode,
+  type FormulaPort
 } from "./model/document";
+
+import {
+  validateConnection
+} from "./model/connections";
 
 import {
   loadEditorDocument,
   saveEditorDocument
 } from "./model/storage";
+
+interface ConnectionFeedback {
+  kind: "ready" | "admitted" | "blocked";
+  message: string;
+}
 
 function App() {
   const [document, setDocument] = useState<EditorDocument>(
@@ -30,6 +49,15 @@ function App() {
 
   const [selectedNodeId, setSelectedNodeId] =
     useState<string | null>(null);
+
+  const [tool, setTool] =
+    useState<EditorTool>("select");
+
+  const [pendingSource, setPendingSource] =
+    useState<FormulaEndpoint | null>(null);
+
+  const [connectionFeedback, setConnectionFeedback] =
+    useState<ConnectionFeedback | null>(null);
 
   useEffect(() => {
     saveEditorDocument(document);
@@ -63,9 +91,118 @@ function App() {
     setSelectedNodeId(node.id);
   };
 
-  const handleSave = () => {
-    saveEditorDocument(document);
+  const handleToolChange = (nextTool: EditorTool) => {
+    setTool(nextTool);
+    setPendingSource(null);
+
+    setConnectionFeedback(
+      nextTool === "connect"
+        ? {
+            kind: "ready",
+            message:
+              "Choose an output port, then a compatible input."
+          }
+        : null
+    );
   };
+
+  const handlePortClick = (
+    node: FormulaNode,
+    port: FormulaPort
+  ) => {
+    setSelectedNodeId(node.id);
+
+    if (tool !== "connect") {
+      return;
+    }
+
+    const endpoint: FormulaEndpoint = {
+      nodeId: node.id,
+      portId: port.id
+    };
+
+    if (port.direction === "output") {
+      setPendingSource(endpoint);
+
+      setConnectionFeedback({
+        kind: "ready",
+        message:
+          `${node.label}.${port.label} selected. ` +
+          "Choose a compatible input."
+      });
+
+      return;
+    }
+
+    if (pendingSource === null) {
+      setConnectionFeedback({
+        kind: "blocked",
+        message:
+          "Choose an output port before choosing an input."
+      });
+
+      return;
+    }
+
+    const decision = validateConnection(
+      document,
+      pendingSource,
+      endpoint
+    );
+
+    if (!decision.admitted) {
+      setConnectionFeedback({
+        kind: "blocked",
+        message: decision.reason
+      });
+
+      return;
+    }
+
+    const edge = createFormulaEdge(
+      pendingSource,
+      endpoint,
+      decision.dataType
+    );
+
+    setDocument((currentDocument) => ({
+      ...currentDocument,
+      edges: [...currentDocument.edges, edge],
+      updatedAt: new Date().toISOString()
+    }));
+
+    setPendingSource(null);
+
+    setConnectionFeedback({
+      kind: "admitted",
+      message:
+        `Persistent relationship admitted: ` +
+        `${decision.dataType}.`
+    });
+  };
+
+  const handleBackgroundClick = () => {
+    setSelectedNodeId(null);
+
+    if (tool === "connect") {
+      setPendingSource(null);
+
+      setConnectionFeedback({
+        kind: "ready",
+        message:
+          "Connection selection cleared. Choose an output."
+      });
+    }
+  };
+
+  const selectedConnectionCount =
+    selectedNode === null
+      ? 0
+      : document.edges.filter(
+          (edge) =>
+            edge.source.nodeId === selectedNode.id ||
+            edge.target.nodeId === selectedNode.id
+        ).length;
 
   return (
     <div className="editor-app">
@@ -87,13 +224,8 @@ function App() {
           </span>
 
           <span className="status-pill">
-            {document.nodes.length === 0
-              ? document.title
-              : `${document.nodes.length} semantic ${
-                  document.nodes.length === 1
-                    ? "object"
-                    : "objects"
-                }`}
+            {document.nodes.length} nodes ·{" "}
+            {document.edges.length} edges
           </span>
 
           <span className="status-pill status-persisted">
@@ -102,7 +234,10 @@ function App() {
         </div>
 
         <div className="topbar-actions">
-          <button type="button" onClick={handleSave}>
+          <button
+            type="button"
+            onClick={() => saveEditorDocument(document)}
+          >
             Save
           </button>
 
@@ -152,9 +287,7 @@ function App() {
                       }
                       key={item.id}
                       type="button"
-                      onClick={() =>
-                        handleCreateNode(item)
-                      }
+                      onClick={() => handleCreateNode(item)}
                     >
                       <span
                         className="palette-dot"
@@ -174,16 +307,32 @@ function App() {
             <div className="tool-cluster">
               <button
                 type="button"
-                className="tool-button active"
-                disabled
+                className={
+                  `tool-button` +
+                  (
+                    tool === "select"
+                      ? " active"
+                      : ""
+                  )
+                }
+                aria-pressed={tool === "select"}
+                onClick={() => handleToolChange("select")}
               >
                 Select
               </button>
 
               <button
                 type="button"
-                className="tool-button"
-                disabled
+                className={
+                  `tool-button` +
+                  (
+                    tool === "connect"
+                      ? " active"
+                      : ""
+                  )
+                }
+                aria-pressed={tool === "connect"}
+                onClick={() => handleToolChange("connect")}
               >
                 Connect
               </button>
@@ -198,12 +347,8 @@ function App() {
             </div>
 
             <div className="surface-readout">
-              <span>
-                X {selectedNode?.x ?? 0}
-              </span>
-              <span>
-                Y {selectedNode?.y ?? 0}
-              </span>
+              <span>X {selectedNode?.x ?? 0}</span>
+              <span>Y {selectedNode?.y ?? 0}</span>
               <span>
                 {Math.round(
                   document.viewport.zoom * 100
@@ -213,202 +358,28 @@ function App() {
             </div>
           </div>
 
-          <div className="canvas-stage">
-            <svg
-              className="formula-canvas"
-              viewBox="0 0 1200 760"
-              role="img"
-              aria-labelledby={
-                "surface-title surface-description"
+          {connectionFeedback !== null && (
+            <div
+              className={
+                `connection-feedback ` +
+                `feedback-${connectionFeedback.kind}`
               }
-              onClick={() => setSelectedNodeId(null)}
+              role="status"
             >
-              <title id="surface-title">
-                Persistent compositional formula surface
-              </title>
+              {connectionFeedback.message}
+            </div>
+          )}
 
-              <desc id="surface-description">
-                Typed semantic objects are rendered as
-                persistent SVG nodes.
-              </desc>
-
-              <defs>
-                <pattern
-                  id="dot-grid"
-                  width="24"
-                  height="24"
-                  patternUnits="userSpaceOnUse"
-                >
-                  <circle
-                    cx="1"
-                    cy="1"
-                    r="1"
-                    className="grid-dot"
-                  />
-                </pattern>
-              </defs>
-
-              <rect
-                width="1200"
-                height="760"
-                className="canvas-background"
-              />
-
-              <rect
-                width="1200"
-                height="760"
-                fill="url(#dot-grid)"
-              />
-
-              {document.nodes.map((node) => {
-                const isSelected =
-                  node.id === selectedNodeId;
-
-                return (
-                  <g
-                    key={node.id}
-                    className={
-                      `formula-node node-${node.domain}` +
-                      (isSelected
-                        ? " formula-node-selected"
-                        : "")
-                    }
-                    transform={
-                      `translate(${node.x} ${node.y})`
-                    }
-                    role="button"
-                    tabIndex={0}
-                    aria-label={
-                      `${node.domain} ${node.label} node`
-                    }
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setSelectedNodeId(node.id);
-                    }}
-                    onKeyDown={(event) => {
-                      if (
-                        event.key === "Enter" ||
-                        event.key === " "
-                      ) {
-                        event.preventDefault();
-                        setSelectedNodeId(node.id);
-                      }
-                    }}
-                  >
-                    <rect
-                      width={node.width}
-                      height={node.height}
-                      rx="16"
-                      className="formula-node-body"
-                    />
-
-                    <rect
-                      width={node.width}
-                      height="28"
-                      rx="16"
-                      className="formula-node-header"
-                    />
-
-                    <rect
-                      y="14"
-                      width={node.width}
-                      height="14"
-                      className="formula-node-header-fill"
-                    />
-
-                    <circle
-                      cx="17"
-                      cy="14"
-                      r="4"
-                      className="formula-node-domain-dot"
-                    />
-
-                    <text
-                      x="29"
-                      y="18"
-                      className="formula-node-domain"
-                    >
-                      {node.domain.toUpperCase()}
-                    </text>
-
-                    <text
-                      x="16"
-                      y="53"
-                      className="formula-node-label"
-                    >
-                      {node.label}
-                    </text>
-
-                    <text
-                      x="16"
-                      y="72"
-                      className="formula-node-kind"
-                    >
-                      {node.kind}
-                    </text>
-                  </g>
-                );
-              })}
-
-              {document.nodes.length === 0 && (
-                <g
-                  transform="translate(600 335)"
-                  className="empty-state"
-                >
-                  <rect
-                    x="-190"
-                    y="-84"
-                    width="380"
-                    height="168"
-                    rx="24"
-                    className="empty-state-boundary"
-                  />
-
-                  <circle
-                    cx="0"
-                    cy="-24"
-                    r="20"
-                    className="empty-state-icon"
-                  />
-
-                  <path
-                    d="M -7 -24 H 7 M 0 -31 V -17"
-                    className="empty-state-plus"
-                  />
-
-                  <text
-                    x="0"
-                    y="24"
-                    className="empty-state-title"
-                  >
-                    Formula surface ready
-                  </text>
-
-                  <text
-                    x="0"
-                    y="50"
-                    className="empty-state-copy"
-                  >
-                    Choose a typed object from the palette.
-                  </text>
-                </g>
-              )}
-
-              <g
-                transform="translate(40 700)"
-                className="boundary-note"
-              >
-                <rect
-                  width="360"
-                  height="34"
-                  rx="10"
-                />
-
-                <text x="16" y="22">
-                  external_execution_authorized = false
-                </text>
-              </g>
-            </svg>
+          <div className="canvas-stage">
+            <FormulaCanvas
+              document={document}
+              selectedNodeId={selectedNodeId}
+              tool={tool}
+              pendingSource={pendingSource}
+              onSelectNode={setSelectedNodeId}
+              onBackgroundClick={handleBackgroundClick}
+              onPortClick={handlePortClick}
+            />
           </div>
         </section>
 
@@ -431,15 +402,16 @@ function App() {
               <strong>No object selected</strong>
 
               <span>
-                Select a semantic object to inspect its
-                stable identity and geometry.
+                Select an object to inspect its identity,
+                ports, and relationships.
               </span>
             </div>
           ) : (
             <section className="node-inspector">
               <div
                 className={
-                  `inspector-domain inspector-${selectedNode.domain}`
+                  `inspector-domain ` +
+                  `inspector-${selectedNode.domain}`
                 }
               >
                 {selectedNode.domain}
@@ -468,22 +440,37 @@ function App() {
                 </div>
 
                 <div>
-                  <dt>Size</dt>
-                  <dd>
-                    {selectedNode.width} ×{" "}
-                    {selectedNode.height}
-                  </dd>
+                  <dt>Ports</dt>
+                  <dd>{selectedNode.ports.length}</dd>
                 </div>
 
                 <div>
-                  <dt>Created</dt>
-                  <dd>
-                    {new Date(
-                      selectedNode.createdAt
-                    ).toLocaleTimeString()}
-                  </dd>
+                  <dt>Relationships</dt>
+                  <dd>{selectedConnectionCount}</dd>
                 </div>
               </dl>
+
+              <div className="inspector-port-list">
+                {selectedNode.ports.map((port) => (
+                  <div
+                    className="inspector-port"
+                    key={port.id}
+                  >
+                    <span
+                      className={
+                        `inspector-port-direction ` +
+                        `direction-${port.direction}`
+                      }
+                    >
+                      {port.direction}
+                    </span>
+
+                    <span>{port.label}</span>
+
+                    <code>{port.dataType}</code>
+                  </div>
+                ))}
+              </div>
             </section>
           )}
 
@@ -494,28 +481,24 @@ function App() {
               </span>
 
               <span className="compiler-state">
-                Idle
+                Graph
               </span>
             </div>
 
             <dl className="compiler-facts">
               <div>
                 <dt>Document</dt>
-                <dd>
-                  {document.nodes.length === 0
-                    ? "Empty"
-                    : `${document.nodes.length} nodes`}
-                </dd>
+                <dd>{document.nodes.length} nodes</dd>
+              </div>
+
+              <div>
+                <dt>Relationships</dt>
+                <dd>{document.edges.length}</dd>
               </div>
 
               <div>
                 <dt>Formula IR</dt>
                 <dd>Not generated</dd>
-              </div>
-
-              <div>
-                <dt>Obstructions</dt>
-                <dd>0</dd>
               </div>
 
               <div>
@@ -540,8 +523,8 @@ function App() {
             </div>
 
             <div className="dock-empty">
-              Persistent identity exists. Operation history
-              begins in Slice 4.
+              Persistent composition exists. Typed operation
+              history begins in Slice 4.
             </div>
           </article>
 
@@ -558,8 +541,8 @@ function App() {
             </div>
 
             <div className="dock-empty">
-              The document is saved locally. Audit receipts
-              begin after typed operations exist.
+              Incompatible connections are blocked visibly.
+              Receipts begin after operations exist.
             </div>
           </article>
         </section>
