@@ -9,6 +9,11 @@ import {
   type TribunalReport
 } from "./tribunals";
 
+import {
+  canonicalizeProperties,
+  type FormulaProperties
+} from "../domain/properties";
+
 export interface FormulaIRPort {
   id: string;
   key: string;
@@ -22,6 +27,7 @@ export interface FormulaIRNode {
   domain: "core" | "gravity" | "ael";
   kind: string;
   label: string;
+  properties: FormulaProperties;
   inputs: FormulaIRPort[];
   outputs: FormulaIRPort[];
 }
@@ -36,7 +42,7 @@ export interface FormulaIREdge {
 }
 
 export interface FormulaIR {
-  schemaVersion: 1;
+  schemaVersion: 2;
   documentId: string;
   nodes: FormulaIRNode[];
   edges: FormulaIREdge[];
@@ -121,6 +127,12 @@ function createFormulaIR(
       kind: node.kind,
       label: node.label,
 
+      properties: canonicalizeProperties(
+        node.domain,
+        node.kind,
+        node.properties
+      ),
+
       inputs: node.ports
         .filter(
           (port) => port.direction === "input"
@@ -154,7 +166,7 @@ function createFormulaIR(
     }));
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     documentId: document.documentId,
     nodes,
     edges,

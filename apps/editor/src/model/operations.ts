@@ -4,6 +4,10 @@ import type {
   FormulaNode
 } from "./document";
 
+import type {
+  FormulaProperties
+} from "../domain/properties";
+
 export interface IndexedFormulaEdge {
   edge: FormulaEdge;
   index: number;
@@ -48,6 +52,12 @@ export type EditorOperation =
         x: number;
         y: number;
       };
+    }
+  | {
+      type: "node.properties.update";
+      nodeId: string;
+      from: FormulaProperties;
+      to: FormulaProperties;
     };
 
 function insertAt<T>(
@@ -226,6 +236,33 @@ export function applyEditorOperation(
         updatedAt
       };
     }
+
+    case "node.properties.update": {
+      const nodeExists = document.nodes.some(
+        (node) => node.id === operation.nodeId
+      );
+
+      if (!nodeExists) {
+        return document;
+      }
+
+      return {
+        ...document,
+
+        nodes: document.nodes.map((node) =>
+          node.id === operation.nodeId
+            ? {
+                ...node,
+                properties: {
+                  ...operation.to
+                }
+              }
+            : node
+        ),
+
+        updatedAt
+      };
+    }
   }
 }
 
@@ -274,6 +311,14 @@ export function invertEditorOperation(
     case "node.move":
       return {
         type: "node.move",
+        nodeId: operation.nodeId,
+        from: operation.to,
+        to: operation.from
+      };
+
+    case "node.properties.update":
+      return {
+        type: "node.properties.update",
         nodeId: operation.nodeId,
         from: operation.to,
         to: operation.from

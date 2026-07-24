@@ -13,6 +13,7 @@ import "./interaction.css";
 import "./audit.css";
 import "./compiler.css";
 import "./workspace.css";
+import "./properties.css";
 
 import {
   FormulaCanvas,
@@ -32,9 +33,17 @@ import {
 } from "./components/CompilerPanel";
 
 import {
+  NodePropertyEditor
+} from "./components/NodePropertyEditor";
+
+import {
   paletteGroups,
   type PaletteItem
 } from "./domain/palette";
+
+import type {
+  FormulaProperties
+} from "./domain/properties";
 
 import {
   createEditorDocument,
@@ -334,6 +343,34 @@ function App() {
           "Connection selection cleared. Choose an output."
       });
     }
+  };
+
+  const handleNodePropertiesCommit = async (
+    node: FormulaNode,
+    properties: FormulaProperties
+  ) => {
+    await commitOperation(
+      {
+        type: "node.properties.update",
+        nodeId: node.id,
+        from: {
+          ...(node.properties ?? {})
+        },
+        to: {
+          ...properties
+        }
+      },
+      `Update ${node.domain} ${node.label} properties`
+    );
+
+    setSelectedNodeId(node.id);
+
+    setConnectionFeedback({
+      kind: "admitted",
+      message:
+        `Updated semantic properties for ` +
+        `${node.label}.`
+    });
   };
 
   const handleDeleteSelected = useCallback(
@@ -779,6 +816,11 @@ function App() {
                   <dd>{selectedConnectionCount}</dd>
                 </div>
               </dl>
+
+              <NodePropertyEditor
+                node={selectedNode}
+                onCommit={handleNodePropertiesCommit}
+              />
 
               <div className="inspector-port-list">
                 {selectedNode.ports.map((port) => (

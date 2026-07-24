@@ -82,6 +82,7 @@ function subjectIdsForOperation(
       ];
 
     case "node.move":
+    case "node.properties.update":
       return [operation.nodeId];
 
     case "edge.add":

@@ -1,5 +1,9 @@
 import type { FormulaDomain } from "../domain/palette";
 
+import type {
+  FormulaProperties
+} from "../domain/properties";
+
 import {
   createPorts,
   type EditorDocument,
@@ -17,6 +21,28 @@ function isFormulaDomain(
     value === "core" ||
     value === "gravity" ||
     value === "ael"
+  );
+}
+
+function isFormulaPropertyValue(
+  value: unknown
+): value is string | number | boolean {
+  return (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  );
+}
+
+function isFormulaProperties(
+  value: unknown
+): value is FormulaProperties {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  return Object.values(value).every(
+    isFormulaPropertyValue
   );
 }
 
@@ -61,6 +87,10 @@ function isFormulaNodeV2(
     typeof candidate.height === "number" &&
     Array.isArray(candidate.ports) &&
     candidate.ports.every(isFormulaPort) &&
+    (
+      candidate.properties === undefined ||
+      isFormulaProperties(candidate.properties)
+    ) &&
     typeof candidate.createdAt === "string"
   );
 }

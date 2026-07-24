@@ -1,0 +1,131 @@
+.property-editor {
+  display: grid;
+  gap: 11px;
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.property-editor-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.property-editor-heading div {
+  display: grid;
+  gap: 3px;
+}
+
+.property-editor-heading strong {
+  color: #3d444d;
+  font-size: 11px;
+}
+
+.property-editor-heading > span {
+  min-width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--muted);
+  background: #ffffff;
+  font-size: 8px;
+}
+
+.property-field-list {
+  display: grid;
+  gap: 9px;
+}
+
+.property-field {
+  display: grid;
+  gap: 5px;
+}
+
+.property-field > span,
+.property-checkbox > span {
+  color: #707985;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.property-field input,
+.property-field select,
+.property-field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: #343b44;
+  background: #ffffff;
+  font: inherit;
+  font-size: 9px;
+  outline: none;
+}
+
+.property-field input,
+.property-field select {
+  height: 34px;
+  padding: 0 9px;
+}
+
+.property-field textarea {
+  resize: vertical;
+  min-height: 66px;
+  padding: 8px 9px;
+  line-height: 1.45;
+}
+
+.property-field input:focus,
+.property-field select:focus,
+.property-field textarea:focus {
+  border-color: #7e8997;
+  box-shadow:
+    0 0 0 2px rgba(82, 94, 109, 0.1);
+}
+
+.property-checkbox {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.property-checkbox input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.property-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.property-editor-actions button {
+  min-height: 31px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: #626b76;
+  background: #ffffff;
+  font-size: 9px;
+}
+
+.property-editor-actions button:disabled {
+  opacity: 0.45;
+}
+
+.property-editor-actions .property-apply {
+  color: #ffffff;
+  border-color: #303946;
+  background: #303946;
+}

@@ -8,6 +8,11 @@ import {
   type PortDirection
 } from "../domain/definitions";
 
+import {
+  createDefaultProperties,
+  type FormulaProperties
+} from "../domain/properties";
+
 export interface FormulaPort {
   id: string;
   key: string;
@@ -26,6 +31,9 @@ export interface FormulaNode {
   width: number;
   height: number;
   ports: FormulaPort[];
+
+  properties?: FormulaProperties;
+
   createdAt: string;
 }
 
@@ -144,6 +152,12 @@ export function createFormulaNode(
     width: 200,
     height: Math.max(92, 64 + maximumPortCount * 22),
     ports,
+
+    properties: createDefaultProperties(
+      item.domain,
+      item.kind
+    ),
+
     createdAt: new Date().toISOString()
   };
 }
