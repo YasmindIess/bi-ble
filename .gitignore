@@ -1,0 +1,21 @@
+# OCaml/Dune output
+_build/
+*.install
+
+# Local runtime state
+runtime/local/*
+!runtime/local/.gitkeep
+
+# Future web-editor output
+node_modules/
+dist/
+coverage/
+*.log
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Editor/OS noise
+.DS_Store

@@ -1,0 +1,43 @@
+{
+  "name": "bi-ble-editor",
+
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
+
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {},
+
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "24",
+      "pnpmVersion": "11.17.0",
+      "nodeGypDependencies": true
+    }
+  },
+
+  "forwardPorts": [
+    5173,
+    8080
+  ],
+
+  "portsAttributes": {
+    "5173": {
+      "label": "Smart Vector Editor",
+      "onAutoForward": "openBrowser"
+    },
+
+    "8080": {
+      "label": "Blochfield Audit Stream",
+      "onAutoForward": "notify"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  },
+
+  "remoteUser": "vscode"
+}
