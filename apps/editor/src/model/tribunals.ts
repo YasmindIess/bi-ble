@@ -5,6 +5,10 @@ import type {
   FormulaIRNode
 } from "./compiler";
 
+import {
+  evaluateAelPropertyPolicy
+} from "./aelPolicy";
+
 export type TribunalDecision =
   | "admitted"
   | "blocked"
@@ -436,6 +440,25 @@ function evaluateLinearTribunal(
     }
   }
 
+  if (definition.domain === "ael") {
+    const propertyEvaluation =
+      evaluateAelPropertyPolicy(ir);
+
+    checksPassed +=
+      propertyEvaluation.checksPassed;
+
+    checksTotal +=
+      propertyEvaluation.checksTotal;
+
+    obstructions.push(
+      ...propertyEvaluation.obstructions
+    );
+
+    warnings.push(
+      ...propertyEvaluation.warnings
+    );
+  }
+
   if (structural.decision === "blocked") {
     obstructions.unshift(
       issue(
@@ -458,21 +481,6 @@ function evaluateLinearTribunal(
           "value status, and route metadata are not " +
           "bound yet.",
         domainNodes.map((node) => node.id)
-      )
-    );
-  }
-
-  if (definition.domain === "ael") {
-    warnings.push(
-      issue(
-        definition.id,
-        "claim_classes_not_bound",
-        "AEL topology is being evaluated, but claims " +
-          "are not yet classified as fact, " +
-          "interpretation, or aspiration.",
-        domainNodes
-          .filter((node) => node.kind === "claim")
-          .map((node) => node.id)
       )
     );
   }
