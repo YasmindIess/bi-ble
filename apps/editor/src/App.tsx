@@ -8,6 +8,7 @@ import "./App.css";
 import "./persistence.css";
 import "./connections.css";
 import "./history.css";
+import "./interaction.css";
 
 import {
   FormulaCanvas,
@@ -131,6 +132,43 @@ function App() {
     );
 
     setSelectedNodeId(node.id);
+  };
+
+  const handleNodeMoveCommit = async (
+    node: FormulaNode,
+    result: {
+      x: number;
+      y: number;
+      deltaX: number;
+      deltaY: number;
+      pointerDistance: number;
+    }
+  ) => {
+    await commitOperation(
+      {
+        type: "node.move",
+        nodeId: node.id,
+        from: {
+          x: node.x,
+          y: node.y
+        },
+        to: {
+          x: result.x,
+          y: result.y
+        }
+      },
+      `Move ${node.domain} ${node.label}`
+    );
+
+    setSelectedNodeId(node.id);
+
+    setConnectionFeedback({
+      kind: "admitted",
+      message:
+        `Moved ${node.label}: ` +
+        `ΔX ${Math.round(result.deltaX)}, ` +
+        `ΔY ${Math.round(result.deltaY)}.`
+    });
   };
 
   const handleToolChange = (nextTool: EditorTool) => {
@@ -420,8 +458,12 @@ function App() {
             </div>
 
             <div className="surface-readout">
-              <span>X {selectedNode?.x ?? 0}</span>
-              <span>Y {selectedNode?.y ?? 0}</span>
+              <span>
+                X {Math.round(selectedNode?.x ?? 0)}
+              </span>
+              <span>
+                Y {Math.round(selectedNode?.y ?? 0)}
+              </span>
               <span>
                 {Math.round(
                   document.viewport.zoom * 100
@@ -452,6 +494,7 @@ function App() {
               onSelectNode={setSelectedNodeId}
               onBackgroundClick={handleBackgroundClick}
               onPortClick={handlePortClick}
+              onNodeMoveCommit={handleNodeMoveCommit}
             />
           </div>
         </section>
@@ -508,7 +551,8 @@ function App() {
                 <div>
                   <dt>Position</dt>
                   <dd>
-                    {selectedNode.x}, {selectedNode.y}
+                    {Math.round(selectedNode.x)},{" "}
+                    {Math.round(selectedNode.y)}
                   </dd>
                 </div>
 

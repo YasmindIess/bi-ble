@@ -1,0 +1,67 @@
+.formula-canvas {
+  touch-action: none;
+  user-select: none;
+}
+
+.formula-node {
+  cursor: grab;
+}
+
+.formula-node-dragging {
+  cursor: grabbing;
+}
+
+.formula-node-dragging .formula-node-body {
+  stroke: #26303d;
+  stroke-width: 2.5;
+  filter:
+    drop-shadow(
+      0 10px 16px rgba(31, 38, 48, 0.16)
+    );
+}
+
+.drag-displacement-line {
+  stroke: #8b949f;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 5;
+  pointer-events: none;
+}
+
+.drag-origin-marker {
+  fill: #ffffff;
+  stroke: #7e8792;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.drag-readout {
+  pointer-events: none;
+}
+
+.drag-readout-background {
+  fill: rgba(31, 37, 46, 0.94);
+  stroke: rgba(255, 255, 255, 0.16);
+}
+
+.drag-readout-position,
+.drag-readout-delta {
+  fill: #ffffff;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+  text-anchor: middle;
+}
+
+.drag-readout-position {
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.drag-readout-delta {
+  fill: #cbd1d8;
+  font-size: 8px;
+}

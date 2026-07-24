@@ -25,6 +25,18 @@ export type EditorOperation =
       type: "edge.remove";
       edge: FormulaEdge;
       index: number;
+    }
+  | {
+      type: "node.move";
+      nodeId: string;
+      from: {
+        x: number;
+        y: number;
+      };
+      to: {
+        x: number;
+        y: number;
+      };
     };
 
 function insertAt<T>(
@@ -114,6 +126,30 @@ export function applyEditorOperation(
         updatedAt
       };
     }
+
+    case "node.move": {
+      const nodeExists = document.nodes.some(
+        (node) => node.id === operation.nodeId
+      );
+
+      if (!nodeExists) {
+        return document;
+      }
+
+      return {
+        ...document,
+        nodes: document.nodes.map((node) =>
+          node.id === operation.nodeId
+            ? {
+                ...node,
+                x: operation.to.x,
+                y: operation.to.y
+              }
+            : node
+        ),
+        updatedAt
+      };
+    }
   }
 }
 
@@ -148,6 +184,14 @@ export function invertEditorOperation(
         type: "edge.add",
         edge: operation.edge,
         index: operation.index
+      };
+
+    case "node.move":
+      return {
+        type: "node.move",
+        nodeId: operation.nodeId,
+        from: operation.to,
+        to: operation.from
       };
   }
 }

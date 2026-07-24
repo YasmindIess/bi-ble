@@ -1,3 +1,8 @@
+import {
+  useState,
+  type PointerEvent as ReactPointerEvent
+} from "react";
+
 import type {
   EditorDocument,
   FormulaEndpoint,
@@ -11,6 +16,14 @@ import {
 
 export type EditorTool = "select" | "connect";
 
+interface NodeMoveResult {
+  x: number;
+  y: number;
+  deltaX: number;
+  deltaY: number;
+  pointerDistance: number;
+}
+
 interface FormulaCanvasProps {
   document: EditorDocument;
   selectedNodeId: string | null;
@@ -22,6 +35,22 @@ interface FormulaCanvasProps {
     node: FormulaNode,
     port: FormulaPort
   ) => void;
+  onNodeMoveCommit: (
+    node: FormulaNode,
+    result: NodeMoveResult
+  ) => void | Promise<void>;
+}
+
+interface DragPreview {
+  nodeId: string;
+  pointerId: number;
+  startClientX: number;
+  startClientY: number;
+  startNodeX: number;
+  startNodeY: number;
+  x: number;
+  y: number;
+  pointerDistance: number;
 }
 
 function edgePath(
@@ -43,6 +72,40 @@ function edgePath(
   ].join(" ");
 }
 
+function canvasScale(
+  svg: SVGSVGElement
+): {
+  x: number;
+  y: number;
+} {
+  const bounds = svg.getBoundingClientRect();
+
+  return {
+    x: 1200 / bounds.width,
+    y: 760 / bounds.height
+  };
+}
+
+function clampNodePosition(
+  node: FormulaNode,
+  x: number,
+  y: number
+): {
+  x: number;
+  y: number;
+} {
+  return {
+    x: Math.max(
+      0,
+      Math.min(1200 - node.width, x)
+    ),
+    y: Math.max(
+      0,
+      Math.min(760 - node.height, y)
+    )
+  };
+}
+
 export function FormulaCanvas({
   document,
   selectedNodeId,
@@ -50,8 +113,165 @@ export function FormulaCanvas({
   pendingSource,
   onSelectNode,
   onBackgroundClick,
-  onPortClick
+  onPortClick,
+  onNodeMoveCommit
 }: FormulaCanvasProps) {
+  const [dragPreview, setDragPreview] =
+    useState<DragPreview | null>(null);
+
+  const renderedNodes = document.nodes.map((node) =>
+    dragPreview?.nodeId === node.id
+      ? {
+          ...node,
+          x: dragPreview.x,
+          y: dragPreview.y
+        }
+      : node
+  );
+
+  const draggedOriginalNode =
+    dragPreview === null
+      ? null
+      : document.nodes.find(
+          (node) => node.id === dragPreview.nodeId
+        ) ?? null;
+
+  const handleNodePointerDown = (
+    event: ReactPointerEvent<SVGGElement>,
+    node: FormulaNode
+  ) => {
+    if (
+      tool !== "select" ||
+      event.button !== 0
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    event.currentTarget.setPointerCapture(
+      event.pointerId
+    );
+
+    onSelectNode(node.id);
+
+    setDragPreview({
+      nodeId: node.id,
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startNodeX: node.x,
+      startNodeY: node.y,
+      x: node.x,
+      y: node.y,
+      pointerDistance: 0
+    });
+  };
+
+  const handleNodePointerMove = (
+    event: ReactPointerEvent<SVGGElement>,
+    node: FormulaNode
+  ) => {
+    if (
+      dragPreview === null ||
+      dragPreview.pointerId !== event.pointerId ||
+      dragPreview.nodeId !== node.id
+    ) {
+      return;
+    }
+
+    const svg = event.currentTarget.ownerSVGElement;
+
+    if (svg === null) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const scale = canvasScale(svg);
+
+    const deltaClientX =
+      event.clientX - dragPreview.startClientX;
+
+    const deltaClientY =
+      event.clientY - dragPreview.startClientY;
+
+    const deltaX = deltaClientX * scale.x;
+    const deltaY = deltaClientY * scale.y;
+
+    const nextPosition = clampNodePosition(
+      node,
+      dragPreview.startNodeX + deltaX,
+      dragPreview.startNodeY + deltaY
+    );
+
+    setDragPreview((current) =>
+      current === null
+        ? null
+        : {
+            ...current,
+            x: nextPosition.x,
+            y: nextPosition.y,
+            pointerDistance: Math.hypot(
+              deltaClientX,
+              deltaClientY
+            )
+          }
+    );
+  };
+
+  const finishNodeDrag = (
+    event: ReactPointerEvent<SVGGElement>,
+    node: FormulaNode
+  ) => {
+    if (
+      dragPreview === null ||
+      dragPreview.pointerId !== event.pointerId ||
+      dragPreview.nodeId !== node.id
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (
+      event.currentTarget.hasPointerCapture(
+        event.pointerId
+      )
+    ) {
+      event.currentTarget.releasePointerCapture(
+        event.pointerId
+      );
+    }
+
+    const committedX = Math.round(dragPreview.x);
+    const committedY = Math.round(dragPreview.y);
+
+    const result: NodeMoveResult = {
+      x: committedX,
+      y: committedY,
+      deltaX:
+        committedX - dragPreview.startNodeX,
+      deltaY:
+        committedY - dragPreview.startNodeY,
+      pointerDistance:
+        dragPreview.pointerDistance
+    };
+
+    const moved =
+      Math.abs(result.deltaX) >= 0.5 ||
+      Math.abs(result.deltaY) >= 0.5;
+
+    setDragPreview(null);
+
+    if (moved) {
+      void onNodeMoveCommit(node, result);
+    }
+  };
+
   return (
     <svg
       className="formula-canvas"
@@ -114,13 +334,51 @@ export function FormulaCanvas({
         fill="url(#dot-grid)"
       />
 
+      {dragPreview !== null &&
+        draggedOriginalNode !== null && (
+          <g className="drag-measurement-layer">
+            <line
+              x1={
+                dragPreview.startNodeX +
+                draggedOriginalNode.width / 2
+              }
+              y1={
+                dragPreview.startNodeY +
+                draggedOriginalNode.height / 2
+              }
+              x2={
+                dragPreview.x +
+                draggedOriginalNode.width / 2
+              }
+              y2={
+                dragPreview.y +
+                draggedOriginalNode.height / 2
+              }
+              className="drag-displacement-line"
+            />
+
+            <circle
+              cx={
+                dragPreview.startNodeX +
+                draggedOriginalNode.width / 2
+              }
+              cy={
+                dragPreview.startNodeY +
+                draggedOriginalNode.height / 2
+              }
+              r="4"
+              className="drag-origin-marker"
+            />
+          </g>
+        )}
+
       <g className="formula-edges">
         {document.edges.map((edge) => {
-          const sourceNode = document.nodes.find(
+          const sourceNode = renderedNodes.find(
             (node) => node.id === edge.source.nodeId
           );
 
-          const targetNode = document.nodes.find(
+          const targetNode = renderedNodes.find(
             (node) => node.id === edge.target.nodeId
           );
 
@@ -188,9 +446,12 @@ export function FormulaCanvas({
         })}
       </g>
 
-      {document.nodes.map((node) => {
+      {renderedNodes.map((node) => {
         const isSelected =
           node.id === selectedNodeId;
+
+        const isDragging =
+          dragPreview?.nodeId === node.id;
 
         return (
           <g
@@ -201,6 +462,11 @@ export function FormulaCanvas({
                 isSelected
                   ? " formula-node-selected"
                   : ""
+              ) +
+              (
+                isDragging
+                  ? " formula-node-dragging"
+                  : ""
               )
             }
             transform={`translate(${node.x} ${node.y})`}
@@ -208,6 +474,18 @@ export function FormulaCanvas({
             tabIndex={0}
             aria-label={
               `${node.domain} ${node.label} node`
+            }
+            onPointerDown={(event) =>
+              handleNodePointerDown(event, node)
+            }
+            onPointerMove={(event) =>
+              handleNodePointerMove(event, node)
+            }
+            onPointerUp={(event) =>
+              finishNodeDrag(event, node)
+            }
+            onPointerCancel={(event) =>
+              finishNodeDrag(event, node)
             }
             onClick={(event) => {
               event.stopPropagation();
@@ -317,6 +595,9 @@ export function FormulaCanvas({
                     `${port.direction} ${port.label} ` +
                     `${port.dataType}`
                   }
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                  }}
                   onClick={(event) => {
                     event.stopPropagation();
                     onPortClick(node, port);
@@ -359,6 +640,54 @@ export function FormulaCanvas({
                 </g>
               );
             })}
+
+            {isDragging &&
+              dragPreview !== null && (
+                <g
+                  transform={
+                    `translate(${node.width / 2} ` +
+                    `${node.height + 18})`
+                  }
+                  className="drag-readout"
+                >
+                  <rect
+                    x="-86"
+                    y="-12"
+                    width="172"
+                    height="38"
+                    rx="9"
+                    className="drag-readout-background"
+                  />
+
+                  <text
+                    x="0"
+                    y="2"
+                    className="drag-readout-position"
+                  >
+                    X {Math.round(dragPreview.x)}
+                    {"  "}
+                    Y {Math.round(dragPreview.y)}
+                  </text>
+
+                  <text
+                    x="0"
+                    y="17"
+                    className="drag-readout-delta"
+                  >
+                    ΔX{" "}
+                    {Math.round(
+                      dragPreview.x -
+                      dragPreview.startNodeX
+                    )}
+                    {"  "}
+                    ΔY{" "}
+                    {Math.round(
+                      dragPreview.y -
+                      dragPreview.startNodeY
+                    )}
+                  </text>
+                </g>
+              )}
           </g>
         );
       })}
