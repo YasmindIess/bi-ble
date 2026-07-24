@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "repositoryVisibility": "public",
+  "executionMode": "simulation_only",
+  "externalExecutionAuthorized": false,
+  "liveSigningEnabled": false,
+  "realSecretsAllowed": false
+}
