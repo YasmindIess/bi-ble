@@ -1,0 +1,100 @@
+.compiler-state-compiling {
+  color: #536071;
+  background: #e9edf2;
+}
+
+.compiler-state-blocked {
+  color: #8a493d;
+  background: #f8e8e5;
+}
+
+.compiler-state-admitted {
+  color: var(--safe);
+  background: var(--safe-soft);
+}
+
+.compiler-digest {
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+  font-size: 8px !important;
+}
+
+.compiler-empty-report,
+.compiler-admitted-report {
+  margin-top: 14px;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.compiler-empty-report {
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  background: #fafbfc;
+}
+
+.compiler-admitted-report {
+  color: var(--safe);
+  border: 1px solid #cde2d7;
+  background: var(--safe-soft);
+}
+
+.compiler-issue-group {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.compiler-group-heading {
+  color: var(--quiet);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.compiler-issue {
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.compiler-issue strong {
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+  font-size: 7px;
+}
+
+.compiler-issue span {
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.compiler-obstruction {
+  color: #78483f;
+  border: 1px solid #ead5d0;
+  background: #fbefec;
+}
+
+.compiler-warning {
+  color: #74634d;
+  border: 1px solid #e8ddc8;
+  background: #fbf7ee;
+}
+
+.compiler-issue-group small {
+  color: var(--quiet);
+  font-size: 7px;
+}

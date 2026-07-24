@@ -10,6 +10,7 @@ import "./connections.css";
 import "./history.css";
 import "./interaction.css";
 import "./audit.css";
+import "./compiler.css";
 
 import {
   FormulaCanvas,
@@ -23,6 +24,10 @@ import {
 import {
   AuditPanel
 } from "./components/AuditPanel";
+
+import {
+  CompilerPanel
+} from "./components/CompilerPanel";
 
 import {
   paletteGroups,
@@ -66,6 +71,11 @@ import {
   type OperationAuditContext
 } from "./model/audit";
 
+import {
+  compileFormula,
+  type CompilationResult
+} from "./model/compiler";
+
 interface ConnectionFeedback {
   kind: "ready" | "admitted" | "blocked";
   message: string;
@@ -99,9 +109,19 @@ function App() {
   const [connectionFeedback, setConnectionFeedback] =
     useState<ConnectionFeedback | null>(null);
 
+  const [compilation, setCompilation] =
+    useState<CompilationResult | null>(null);
+
+  const [isCompiling, setIsCompiling] =
+    useState(false);
+
   useEffect(() => {
     saveEditorSession(session);
   }, [session]);
+
+  useEffect(() => {
+    setCompilation(null);
+  }, [document.updatedAt]);
 
   const selectedNode = useMemo(
     () =>
@@ -311,6 +331,35 @@ function App() {
     }
   };
 
+  const handleCompile = async () => {
+    setIsCompiling(true);
+
+    try {
+      const result = await compileFormula(document);
+      setCompilation(result);
+
+      setConnectionFeedback({
+        kind:
+          result.decision === "admitted"
+            ? "admitted"
+            : "blocked",
+
+        message:
+          result.decision === "admitted"
+            ? "Formula IR admitted structurally."
+            : `Formula IR blocked by ` +
+              `${result.obstructions.length} ` +
+              `obstruction${
+                result.obstructions.length === 1
+                  ? ""
+                  : "s"
+              }.`
+      });
+    } finally {
+      setIsCompiling(false);
+    }
+  };
+
   const selectedConnectionCount =
     selectedNode === null
       ? 0
@@ -386,9 +435,15 @@ function App() {
           <button
             type="button"
             className="primary-action"
-            disabled
+            disabled={
+              document.nodes.length === 0 ||
+              isCompiling
+            }
+            onClick={() => {
+              void handleCompile();
+            }}
           >
-            Compile
+            {isCompiling ? "Compiling…" : "Compile"}
           </button>
         </div>
       </header>
@@ -624,39 +679,12 @@ function App() {
             </section>
           )}
 
-          <section className="compiler-card">
-            <div className="compiler-card-heading">
-              <span className="eyebrow">
-                Formula compiler
-              </span>
-
-              <span className="compiler-state">
-                Graph
-              </span>
-            </div>
-
-            <dl className="compiler-facts">
-              <div>
-                <dt>Document</dt>
-                <dd>{document.nodes.length} nodes</dd>
-              </div>
-
-              <div>
-                <dt>Relationships</dt>
-                <dd>{document.edges.length}</dd>
-              </div>
-
-              <div>
-                <dt>Formula IR</dt>
-                <dd>Not generated</dd>
-              </div>
-
-              <div>
-                <dt>Authority</dt>
-                <dd>Simulation only</dd>
-              </div>
-            </dl>
-          </section>
+          <CompilerPanel
+            result={compilation}
+            isCompiling={isCompiling}
+            nodeCount={document.nodes.length}
+            edgeCount={document.edges.length}
+          />
         </aside>
 
         <section className="bottom-dock">
