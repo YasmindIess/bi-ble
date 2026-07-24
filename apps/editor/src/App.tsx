@@ -7,11 +7,16 @@ import {
 import "./App.css";
 import "./persistence.css";
 import "./connections.css";
+import "./history.css";
 
 import {
   FormulaCanvas,
   type EditorTool
 } from "./components/FormulaCanvas";
+
+import {
+  HistoryPanel
+} from "./components/HistoryPanel";
 
 import {
   paletteGroups,
@@ -22,7 +27,6 @@ import {
   createEditorDocument,
   createFormulaEdge,
   createFormulaNode,
-  type EditorDocument,
   type FormulaEndpoint,
   type FormulaNode,
   type FormulaPort
@@ -33,9 +37,23 @@ import {
 } from "./model/connections";
 
 import {
-  loadEditorDocument,
-  saveEditorDocument
+  loadEditorSession,
+  saveEditorSession
 } from "./model/storage";
+
+import {
+  canRedo,
+  canUndo,
+  commitEditorOperation,
+  createHistoryState,
+  redoEditorSession,
+  undoEditorSession,
+  type EditorSession
+} from "./model/history";
+
+import type {
+  EditorOperation
+} from "./model/operations";
 
 interface ConnectionFeedback {
   kind: "ready" | "admitted" | "blocked";
@@ -43,9 +61,15 @@ interface ConnectionFeedback {
 }
 
 function App() {
-  const [document, setDocument] = useState<EditorDocument>(
-    () => loadEditorDocument() ?? createEditorDocument()
+  const [session, setSession] = useState<EditorSession>(
+    () =>
+      loadEditorSession() ?? {
+        document: createEditorDocument(),
+        history: createHistoryState()
+      }
   );
+
+  const { document, history } = session;
 
   const [selectedNodeId, setSelectedNodeId] =
     useState<string | null>(null);
@@ -60,8 +84,8 @@ function App() {
     useState<ConnectionFeedback | null>(null);
 
   useEffect(() => {
-    saveEditorDocument(document);
-  }, [document]);
+    saveEditorSession(session);
+  }, [session]);
 
   const selectedNode = useMemo(
     () =>
@@ -76,17 +100,35 @@ function App() {
     0
   );
 
-  const handleCreateNode = (item: PaletteItem) => {
+  const commitOperation = async (
+    operation: EditorOperation,
+    label: string
+  ) => {
+    const nextSession = await commitEditorOperation(
+      session,
+      operation,
+      label
+    );
+
+    setSession(nextSession);
+  };
+
+  const handleCreateNode = async (
+    item: PaletteItem
+  ) => {
     const node = createFormulaNode(
       item,
       document.nodes.length
     );
 
-    setDocument((currentDocument) => ({
-      ...currentDocument,
-      nodes: [...currentDocument.nodes, node],
-      updatedAt: new Date().toISOString()
-    }));
+    await commitOperation(
+      {
+        type: "node.add",
+        node,
+        index: document.nodes.length
+      },
+      `Create ${item.domain} ${item.label}`
+    );
 
     setSelectedNodeId(node.id);
   };
@@ -106,7 +148,7 @@ function App() {
     );
   };
 
-  const handlePortClick = (
+  const handlePortClick = async (
     node: FormulaNode,
     port: FormulaPort
   ) => {
@@ -165,11 +207,14 @@ function App() {
       decision.dataType
     );
 
-    setDocument((currentDocument) => ({
-      ...currentDocument,
-      edges: [...currentDocument.edges, edge],
-      updatedAt: new Date().toISOString()
-    }));
+    await commitOperation(
+      {
+        type: "edge.add",
+        edge,
+        index: document.edges.length
+      },
+      `Connect ${decision.dataType}`
+    );
 
     setPendingSource(null);
 
@@ -236,7 +281,33 @@ function App() {
         <div className="topbar-actions">
           <button
             type="button"
-            onClick={() => saveEditorDocument(document)}
+            disabled={!canUndo(history)}
+            onClick={() => {
+              setSession((current) =>
+                undoEditorSession(current)
+              );
+              setSelectedNodeId(null);
+            }}
+          >
+            Undo
+          </button>
+
+          <button
+            type="button"
+            disabled={!canRedo(history)}
+            onClick={() => {
+              setSession((current) =>
+                redoEditorSession(current)
+              );
+              setSelectedNodeId(null);
+            }}
+          >
+            Redo
+          </button>
+
+          <button
+            type="button"
+            onClick={() => saveEditorSession(session)}
           >
             Save
           </button>
@@ -287,7 +358,9 @@ function App() {
                       }
                       key={item.id}
                       type="button"
-                      onClick={() => handleCreateNode(item)}
+                      onClick={() => {
+                        void handleCreateNode(item);
+                      }}
                     >
                       <span
                         className="palette-dot"
@@ -510,23 +583,7 @@ function App() {
         </aside>
 
         <section className="bottom-dock">
-          <article className="dock-panel">
-            <div className="dock-heading">
-              <div>
-                <span className="eyebrow">
-                  Nondestructive record
-                </span>
-                <h2>History</h2>
-              </div>
-
-              <span className="panel-count">0</span>
-            </div>
-
-            <div className="dock-empty">
-              Persistent composition exists. Typed operation
-              history begins in Slice 4.
-            </div>
-          </article>
+          <HistoryPanel history={history} />
 
           <article className="dock-panel">
             <div className="dock-heading">

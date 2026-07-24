@@ -231,3 +231,114 @@ export function saveEditorDocument(
     JSON.stringify(document)
   );
 }
+
+import {
+  createHistoryState,
+  type EditorSession,
+  type HistoryState
+} from "./history";
+
+const SESSION_STORAGE_KEY =
+  "bi-ble.editor.session.v1";
+
+function isHistoryState(
+  value: unknown
+): value is HistoryState {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const candidate = value as Partial<HistoryState>;
+
+  if (
+    !Array.isArray(candidate.entries) ||
+    typeof candidate.cursor !== "number" ||
+    !Number.isInteger(candidate.cursor) ||
+    candidate.cursor < 0 ||
+    candidate.cursor > candidate.entries.length
+  ) {
+    return false;
+  }
+
+  return candidate.entries.every((entry) => {
+    if (typeof entry !== "object" || entry === null) {
+      return false;
+    }
+
+    const record = entry as {
+      id?: unknown;
+      label?: unknown;
+      createdAt?: unknown;
+      forward?: unknown;
+      inverse?: unknown;
+      beforeDigest?: unknown;
+      afterDigest?: unknown;
+    };
+
+    return (
+      typeof record.id === "string" &&
+      typeof record.label === "string" &&
+      typeof record.createdAt === "string" &&
+      typeof record.forward === "object" &&
+      record.forward !== null &&
+      typeof record.inverse === "object" &&
+      record.inverse !== null &&
+      typeof record.beforeDigest === "string" &&
+      typeof record.afterDigest === "string"
+    );
+  });
+}
+
+function isEditorSession(
+  value: unknown
+): value is EditorSession {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const candidate = value as Partial<EditorSession>;
+
+  return (
+    isEditorDocumentV2(candidate.document) &&
+    isHistoryState(candidate.history)
+  );
+}
+
+export function loadEditorSession():
+  EditorSession | null {
+  try {
+    const serialized = localStorage.getItem(
+      SESSION_STORAGE_KEY
+    );
+
+    if (serialized !== null) {
+      const parsed: unknown = JSON.parse(serialized);
+
+      if (isEditorSession(parsed)) {
+        return parsed;
+      }
+    }
+
+    const existingDocument = loadEditorDocument();
+
+    if (existingDocument === null) {
+      return null;
+    }
+
+    return {
+      document: existingDocument,
+      history: createHistoryState()
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveEditorSession(
+  session: EditorSession
+): void {
+  localStorage.setItem(
+    SESSION_STORAGE_KEY,
+    JSON.stringify(session)
+  );
+}
