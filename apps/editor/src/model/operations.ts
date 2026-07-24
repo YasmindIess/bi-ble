@@ -13,6 +13,214 @@ export interface IndexedFormulaEdge {
   index: number;
 }
 
+export const EDITOR_GRID_SIZE = 16;
+
+const MOVE_COLLISION_GAP = 16;
+const CREATE_COLLISION_GAP = 32;
+const PLACEMENT_SEARCH_RINGS = 12;
+
+type PlacementMode =
+  | "move"
+  | "create";
+
+interface NodePlacement {
+  x: number;
+  y: number;
+}
+
+interface PlacementCandidate
+  extends NodePlacement {
+  distanceSquared: number;
+  manhattanDistance: number;
+}
+
+function snapCoordinate(
+  value: number
+): number {
+  return Math.max(
+    0,
+    Math.round(value / EDITOR_GRID_SIZE) *
+      EDITOR_GRID_SIZE
+  );
+}
+
+export function snapNodePosition(
+  position: NodePlacement
+): NodePlacement {
+  return {
+    x: snapCoordinate(position.x),
+    y: snapCoordinate(position.y)
+  };
+}
+
+function placementsOverlap(
+  candidate: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  },
+  existing: FormulaNode,
+  gap: number
+): boolean {
+  const separatedHorizontally =
+    candidate.x +
+      candidate.width +
+      gap <=
+      existing.x ||
+    existing.x +
+      existing.width +
+      gap <=
+      candidate.x;
+
+  const separatedVertically =
+    candidate.y +
+      candidate.height +
+      gap <=
+      existing.y ||
+    existing.y +
+      existing.height +
+      gap <=
+      candidate.y;
+
+  return !(
+    separatedHorizontally ||
+    separatedVertically
+  );
+}
+
+function createNearbyCandidates(
+  requestedPosition: NodePlacement
+): PlacementCandidate[] {
+  const snapped =
+    snapNodePosition(requestedPosition);
+
+  const candidates:
+    PlacementCandidate[] = [];
+
+  const seen = new Set<string>();
+
+  for (
+    let horizontal = -PLACEMENT_SEARCH_RINGS;
+    horizontal <= PLACEMENT_SEARCH_RINGS;
+    horizontal += 1
+  ) {
+    for (
+      let vertical = -PLACEMENT_SEARCH_RINGS;
+      vertical <= PLACEMENT_SEARCH_RINGS;
+      vertical += 1
+    ) {
+      const x = Math.max(
+        0,
+        snapped.x +
+          horizontal * EDITOR_GRID_SIZE
+      );
+
+      const y = Math.max(
+        0,
+        snapped.y +
+          vertical * EDITOR_GRID_SIZE
+      );
+
+      const key = `${x}:${y}`;
+
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+
+      const deltaX =
+        x - requestedPosition.x;
+
+      const deltaY =
+        y - requestedPosition.y;
+
+      candidates.push({
+        x,
+        y,
+
+        distanceSquared:
+          deltaX * deltaX +
+          deltaY * deltaY,
+
+        manhattanDistance:
+          Math.abs(deltaX) +
+          Math.abs(deltaY)
+      });
+    }
+  }
+
+  return candidates.sort(
+    (left, right) =>
+      left.distanceSquared -
+        right.distanceSquared ||
+      left.manhattanDistance -
+        right.manhattanDistance ||
+      left.y - right.y ||
+      left.x - right.x
+  );
+}
+
+export function resolveResponsiblePlacement(
+  document: EditorDocument,
+
+  subject: {
+    id: string;
+    width: number;
+    height: number;
+  },
+
+  requestedPosition: NodePlacement,
+
+  mode: PlacementMode
+): NodePlacement {
+  const otherNodes =
+    document.nodes.filter(
+      (node) => node.id !== subject.id
+    );
+
+  const gap =
+    mode === "create"
+      ? CREATE_COLLISION_GAP
+      : MOVE_COLLISION_GAP;
+
+  const candidates =
+    createNearbyCandidates(
+      requestedPosition
+    );
+
+  for (const candidate of candidates) {
+    const placement = {
+      x: candidate.x,
+      y: candidate.y,
+      width: subject.width,
+      height: subject.height
+    };
+
+    const available =
+      otherNodes.every(
+        (node) =>
+          !placementsOverlap(
+            placement,
+            node,
+            gap
+          )
+      );
+
+    if (available) {
+      return {
+        x: candidate.x,
+        y: candidate.y
+      };
+    }
+  }
+
+  return snapNodePosition(
+    requestedPosition
+  );
+}
+
 export type EditorOperation =
   | {
       type: "node.add";
@@ -119,12 +327,29 @@ export function applyEditorOperation(
         return document;
       }
 
+      const position =
+        resolveResponsiblePlacement(
+          document,
+          operation.node,
+          {
+            x: operation.node.x,
+            y: operation.node.y
+          },
+          "create"
+        );
+
+      const positionedNode: FormulaNode = {
+        ...operation.node,
+        x: position.x,
+        y: position.y
+      };
+
       return {
         ...document,
 
         nodes: insertAt(
           document.nodes,
-          operation.node,
+          positionedNode,
           operation.index
         ),
 
@@ -212,13 +437,23 @@ export function applyEditorOperation(
     }
 
     case "node.move": {
-      const nodeExists = document.nodes.some(
-        (node) => node.id === operation.nodeId
-      );
+      const movingNode =
+        document.nodes.find(
+          (node) =>
+            node.id === operation.nodeId
+        );
 
-      if (!nodeExists) {
+      if (movingNode === undefined) {
         return document;
       }
+
+      const position =
+        resolveResponsiblePlacement(
+          document,
+          movingNode,
+          operation.to,
+          "move"
+        );
 
       return {
         ...document,
@@ -227,8 +462,8 @@ export function applyEditorOperation(
           node.id === operation.nodeId
             ? {
                 ...node,
-                x: operation.to.x,
-                y: operation.to.y
+                x: position.x,
+                y: position.y
               }
             : node
         ),

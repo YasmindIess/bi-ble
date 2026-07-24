@@ -14,6 +14,7 @@ import "./audit.css";
 import "./compiler.css";
 import "./workspace.css";
 import "./properties.css";
+import "./layout-responsibility.css";
 
 import {
   FormulaCanvas,
