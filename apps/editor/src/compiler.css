@@ -98,3 +98,133 @@
   color: var(--quiet);
   font-size: 7px;
 }
+
+.tribunal-section {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.tribunal-list {
+  display: grid;
+  gap: 8px;
+}
+
+.tribunal-card {
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  background: #fafbfc;
+}
+
+.tribunal-admitted {
+  border-color: #cfe2d8;
+  background: #f3f9f6;
+}
+
+.tribunal-blocked {
+  border-color: #ead5d0;
+  background: #fcf4f2;
+}
+
+.tribunal-not_applicable {
+  opacity: 0.72;
+}
+
+.tribunal-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tribunal-heading div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.tribunal-heading strong {
+  color: #3f4650;
+  font-size: 9px;
+}
+
+.tribunal-heading span {
+  overflow: hidden;
+  color: var(--quiet);
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tribunal-decision {
+  flex: 0 0 auto;
+  padding: 3px 5px;
+  border-radius: 5px;
+  color: #5f6874 !important;
+  background: #e9ecf0;
+  font-size: 7px !important;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.tribunal-admitted .tribunal-decision {
+  color: var(--safe) !important;
+  background: var(--safe-soft);
+}
+
+.tribunal-blocked .tribunal-decision {
+  color: #88493e !important;
+  background: #f7e5e1;
+}
+
+.tribunal-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.tribunal-facts span {
+  padding: 3px 5px;
+  border-radius: 5px;
+  color: #707985;
+  background: rgba(255, 255, 255, 0.85);
+  font-size: 7px;
+}
+
+.tribunal-issue {
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 6px;
+}
+
+.tribunal-issue code {
+  font-size: 6px;
+}
+
+.tribunal-issue span {
+  font-size: 7px;
+  line-height: 1.4;
+}
+
+.tribunal-block {
+  color: #7b473f;
+  border: 1px solid #ead8d4;
+  background: #fff8f6;
+}
+
+.tribunal-warning {
+  color: #74634d;
+  border: 1px solid #e9dec9;
+  background: #fffaf0;
+}
+
+.tribunal-card small {
+  color: var(--quiet);
+  font-size: 7px;
+}

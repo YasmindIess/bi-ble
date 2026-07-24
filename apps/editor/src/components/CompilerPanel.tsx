@@ -170,6 +170,84 @@ export function CompilerPanel({
           execution remains unauthorized.
         </div>
       )}
+
+      {result !== null && (
+        <div className="tribunal-section">
+          <span className="compiler-group-heading">
+            Evaluation modes
+          </span>
+
+          <div className="tribunal-list">
+            {result.tribunals.map((tribunal) => (
+              <article
+                className={
+                  "tribunal-card " +
+                  `tribunal-${tribunal.decision}`
+                }
+                key={tribunal.id}
+              >
+                <div className="tribunal-heading">
+                  <div>
+                    <strong>{tribunal.label}</strong>
+                    <span>{tribunal.id}</span>
+                  </div>
+
+                  <span className="tribunal-decision">
+                    {tribunal.decision}
+                  </span>
+                </div>
+
+                <div className="tribunal-facts">
+                  <span>
+                    {tribunal.facts.nodeCount} nodes
+                  </span>
+
+                  <span>
+                    {tribunal.facts.edgeCount} edges
+                  </span>
+
+                  <span>
+                    {tribunal.score === null
+                      ? "N/A"
+                      : `${tribunal.score}%`}
+                  </span>
+                </div>
+
+                {tribunal.obstructions
+                  .slice(0, 3)
+                  .map((issue) => (
+                    <div
+                      className="tribunal-issue tribunal-block"
+                      key={issue.id}
+                    >
+                      <code>{issue.code}</code>
+                      <span>{issue.message}</span>
+                    </div>
+                  ))}
+
+                {tribunal.warnings
+                  .slice(0, 2)
+                  .map((issue) => (
+                    <div
+                      className="tribunal-issue tribunal-warning"
+                      key={issue.id}
+                    >
+                      <code>{issue.code}</code>
+                      <span>{issue.message}</span>
+                    </div>
+                  ))}
+
+                {tribunal.obstructions.length > 3 && (
+                  <small>
+                    +{tribunal.obstructions.length - 3} more
+                    obstructions
+                  </small>
+                )}
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

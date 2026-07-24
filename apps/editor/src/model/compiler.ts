@@ -4,6 +4,11 @@ import type {
   FormulaPort
 } from "./document";
 
+import {
+  evaluateTribunals,
+  type TribunalReport
+} from "./tribunals";
+
 export interface FormulaIRPort {
   id: string;
   key: string;
@@ -57,6 +62,7 @@ export interface CompilationResult {
   sourceDigest: string;
   irDigest: string;
   ir: FormulaIR;
+  tribunals: TribunalReport[];
   obstructions: CompilationIssue[];
   warnings: CompilationIssue[];
 }
@@ -501,17 +507,29 @@ export async function compileFormula(
       digestValue(ir)
     ]);
 
+  const decision =
+    obstructions.length === 0
+      ? "admitted"
+      : "blocked";
+
+  const tribunals = evaluateTribunals(
+    ir,
+    {
+      decision,
+      obstructions,
+      warnings
+    }
+  );
+
   return {
     generatedAt: new Date().toISOString(),
     sourceDocumentId: document.documentId,
     sourceUpdatedAt: document.updatedAt,
-    decision:
-      obstructions.length === 0
-        ? "admitted"
-        : "blocked",
+    decision,
     sourceDigest,
     irDigest,
     ir,
+    tribunals,
     obstructions,
     warnings
   };
