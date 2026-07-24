@@ -70,8 +70,16 @@ function subjectIdsForOperation(
 ): string[] {
   switch (operation.type) {
     case "node.add":
-    case "node.remove":
       return [operation.node.id];
+
+    case "node.remove":
+    case "node.restore":
+      return [
+        operation.node.id,
+        ...operation.connectedEdges.map(
+          ({ edge }) => edge.id
+        )
+      ];
 
     case "node.move":
       return [operation.nodeId];

@@ -1,4 +1,5 @@
 import type {
+  CompilationIssue,
   CompilationResult
 } from "../model/compiler";
 
@@ -11,6 +12,46 @@ interface CompilerPanelProps {
 
 function shortDigest(value: string): string {
   return value.slice(0, 14);
+}
+
+function IssueList({
+  issues,
+  kind,
+  limit
+}: {
+  issues: CompilationIssue[];
+  kind: "obstruction" | "warning";
+  limit: number;
+}) {
+  return (
+    <div className="compiler-disclosure-body">
+      {issues.slice(0, limit).map((issue) => (
+        <div
+          className={
+            "compiler-issue " +
+            (
+              kind === "obstruction"
+                ? "compiler-obstruction"
+                : "compiler-warning"
+            )
+          }
+          key={issue.id}
+        >
+          <strong>{issue.code}</strong>
+          <span>{issue.message}</span>
+        </div>
+      ))}
+
+      {issues.length > limit && (
+        <small>
+          +{issues.length - limit} more{" "}
+          {kind === "obstruction"
+            ? "obstructions"
+            : "warnings"}
+        </small>
+      )}
+    </div>
+  );
 }
 
 export function CompilerPanel({
@@ -110,58 +151,38 @@ export function CompilerPanel({
 
       {result !== null &&
         result.obstructions.length > 0 && (
-          <div className="compiler-issue-group">
-            <span className="compiler-group-heading">
-              Blocking obstructions
-            </span>
+          <details className="compiler-disclosure">
+            <summary>
+              <span>Blocking obstructions</span>
+              <strong>
+                {result.obstructions.length}
+              </strong>
+            </summary>
 
-            {result.obstructions
-              .slice(0, 6)
-              .map((issue) => (
-                <div
-                  className="compiler-issue compiler-obstruction"
-                  key={issue.id}
-                >
-                  <strong>{issue.code}</strong>
-                  <span>{issue.message}</span>
-                </div>
-              ))}
-
-            {result.obstructions.length > 6 && (
-              <small>
-                +{result.obstructions.length - 6} more
-                obstructions
-              </small>
-            )}
-          </div>
+            <IssueList
+              issues={result.obstructions}
+              kind="obstruction"
+              limit={8}
+            />
+          </details>
         )}
 
       {result !== null &&
         result.warnings.length > 0 && (
-          <div className="compiler-issue-group">
-            <span className="compiler-group-heading">
-              Warnings
-            </span>
+          <details className="compiler-disclosure">
+            <summary>
+              <span>Warnings</span>
+              <strong>
+                {result.warnings.length}
+              </strong>
+            </summary>
 
-            {result.warnings
-              .slice(0, 4)
-              .map((issue) => (
-                <div
-                  className="compiler-issue compiler-warning"
-                  key={issue.id}
-                >
-                  <strong>{issue.code}</strong>
-                  <span>{issue.message}</span>
-                </div>
-              ))}
-
-            {result.warnings.length > 4 && (
-              <small>
-                +{result.warnings.length - 4} more
-                warnings
-              </small>
-            )}
-          </div>
+            <IssueList
+              issues={result.warnings}
+              kind="warning"
+              limit={6}
+            />
+          </details>
         )}
 
       {result?.decision === "admitted" && (
@@ -179,71 +200,86 @@ export function CompilerPanel({
 
           <div className="tribunal-list">
             {result.tribunals.map((tribunal) => (
-              <article
+              <details
                 className={
                   "tribunal-card " +
                   `tribunal-${tribunal.decision}`
                 }
                 key={tribunal.id}
               >
-                <div className="tribunal-heading">
-                  <div>
-                    <strong>{tribunal.label}</strong>
-                    <span>{tribunal.id}</span>
+                <summary className="tribunal-summary">
+                  <div className="tribunal-heading">
+                    <div>
+                      <strong>{tribunal.label}</strong>
+                      <span>{tribunal.id}</span>
+                    </div>
+
+                    <span className="tribunal-decision">
+                      {tribunal.decision}
+                    </span>
                   </div>
 
-                  <span className="tribunal-decision">
-                    {tribunal.decision}
-                  </span>
+                  <div className="tribunal-facts">
+                    <span>
+                      {tribunal.facts.nodeCount} nodes
+                    </span>
+
+                    <span>
+                      {tribunal.facts.edgeCount} edges
+                    </span>
+
+                    <span>
+                      {tribunal.score === null
+                        ? "N/A"
+                        : `${tribunal.score}%`}
+                    </span>
+                  </div>
+                </summary>
+
+                <div className="tribunal-detail-body">
+                  {tribunal.obstructions
+                    .slice(0, 5)
+                    .map((issue) => (
+                      <div
+                        className={
+                          "tribunal-issue tribunal-block"
+                        }
+                        key={issue.id}
+                      >
+                        <code>{issue.code}</code>
+                        <span>{issue.message}</span>
+                      </div>
+                    ))}
+
+                  {tribunal.warnings
+                    .slice(0, 4)
+                    .map((issue) => (
+                      <div
+                        className={
+                          "tribunal-issue tribunal-warning"
+                        }
+                        key={issue.id}
+                      >
+                        <code>{issue.code}</code>
+                        <span>{issue.message}</span>
+                      </div>
+                    ))}
+
+                  {tribunal.obstructions.length === 0 &&
+                    tribunal.warnings.length === 0 && (
+                      <div className="tribunal-clear">
+                        No tribunal-specific issues.
+                      </div>
+                    )}
+
+                  {tribunal.obstructions.length > 5 && (
+                    <small>
+                      +{tribunal.obstructions.length - 5} more
+                      obstructions
+                    </small>
+                  )}
                 </div>
-
-                <div className="tribunal-facts">
-                  <span>
-                    {tribunal.facts.nodeCount} nodes
-                  </span>
-
-                  <span>
-                    {tribunal.facts.edgeCount} edges
-                  </span>
-
-                  <span>
-                    {tribunal.score === null
-                      ? "N/A"
-                      : `${tribunal.score}%`}
-                  </span>
-                </div>
-
-                {tribunal.obstructions
-                  .slice(0, 3)
-                  .map((issue) => (
-                    <div
-                      className="tribunal-issue tribunal-block"
-                      key={issue.id}
-                    >
-                      <code>{issue.code}</code>
-                      <span>{issue.message}</span>
-                    </div>
-                  ))}
-
-                {tribunal.warnings
-                  .slice(0, 2)
-                  .map((issue) => (
-                    <div
-                      className="tribunal-issue tribunal-warning"
-                      key={issue.id}
-                    >
-                      <code>{issue.code}</code>
-                      <span>{issue.message}</span>
-                    </div>
-                  ))}
-
-                {tribunal.obstructions.length > 3 && (
-                  <small>
-                    +{tribunal.obstructions.length - 3} more
-                    obstructions
-                  </small>
-                )}
-              </article>
+              </details>
             ))}
           </div>
         </div>

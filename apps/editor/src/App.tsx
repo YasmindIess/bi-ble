@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState
@@ -11,6 +12,7 @@ import "./history.css";
 import "./interaction.css";
 import "./audit.css";
 import "./compiler.css";
+import "./workspace.css";
 
 import {
   FormulaCanvas,
@@ -136,20 +138,23 @@ function App() {
     0
   );
 
-  const commitOperation = async (
-    operation: EditorOperation,
-    label: string,
-    auditContext?: OperationAuditContext
-  ) => {
-    const nextSession = await commitEditorOperation(
-      session,
-      operation,
-      label,
-      auditContext
-    );
+  const commitOperation = useCallback(
+    async (
+      operation: EditorOperation,
+      label: string,
+      auditContext?: OperationAuditContext
+    ) => {
+      const nextSession = await commitEditorOperation(
+        session,
+        operation,
+        label,
+        auditContext
+      );
 
-    setSession(nextSession);
-  };
+      setSession(nextSession);
+    },
+    [session]
+  );
 
   const handleCreateNode = async (
     item: PaletteItem
@@ -330,6 +335,114 @@ function App() {
       });
     }
   };
+
+  const handleDeleteSelected = useCallback(
+    async () => {
+    if (selectedNode === null) {
+      return;
+    }
+
+    const nodeIndex = document.nodes.findIndex(
+      (node) => node.id === selectedNode.id
+    );
+
+    if (nodeIndex < 0) {
+      return;
+    }
+
+    const connectedEdges = document.edges.flatMap(
+      (edge, index) =>
+        edge.source.nodeId === selectedNode.id ||
+        edge.target.nodeId === selectedNode.id
+          ? [
+              {
+                edge,
+                index
+              }
+            ]
+          : []
+    );
+
+    await commitOperation(
+      {
+        type: "node.remove",
+        node: selectedNode,
+        index: nodeIndex,
+        connectedEdges
+      },
+      `Delete ${selectedNode.domain} ` +
+        `${selectedNode.label}`
+    );
+
+    setSelectedNodeId(null);
+    setPendingSource(null);
+
+    setConnectionFeedback({
+      kind: "admitted",
+
+      message:
+        `Deleted ${selectedNode.label}` +
+        (
+          connectedEdges.length === 0
+            ? "."
+            : ` and ${connectedEdges.length} connected ` +
+              `relationship${
+                connectedEdges.length === 1
+                  ? ""
+                  : "s"
+              }.`
+        )
+    });
+    },
+    [
+      selectedNode,
+      document.nodes,
+      document.edges,
+      commitOperation
+    ]
+  );
+
+  useEffect(() => {
+    const handleDeleteKey = (
+      event: KeyboardEvent
+    ) => {
+      if (
+        event.key !== "Delete" &&
+        event.key !== "Backspace"
+      ) {
+        return;
+      }
+
+      const target = event.target;
+
+      if (target instanceof HTMLElement) {
+        const isTextEntry =
+          target.isContentEditable ||
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT";
+
+        if (isTextEntry) {
+          return;
+        }
+      }
+
+      event.preventDefault();
+      void handleDeleteSelected();
+    };
+
+    window.addEventListener(
+      "keydown",
+      handleDeleteKey
+    );
+
+    return () => {
+      window.removeEventListener(
+        "keydown",
+        handleDeleteKey
+      );
+    };
+  }, [handleDeleteSelected]);
 
   const handleCompile = async () => {
     setIsCompiling(true);
@@ -542,6 +655,18 @@ function App() {
                 disabled
               >
                 Pan
+              </button>
+
+              <button
+                type="button"
+                className="tool-button danger-tool"
+                disabled={selectedNode === null}
+                title="Delete selected node"
+                onClick={() => {
+                  void handleDeleteSelected();
+                }}
+              >
+                Delete
               </button>
             </div>
 

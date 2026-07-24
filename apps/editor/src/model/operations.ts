@@ -4,6 +4,11 @@ import type {
   FormulaNode
 } from "./document";
 
+export interface IndexedFormulaEdge {
+  edge: FormulaEdge;
+  index: number;
+}
+
 export type EditorOperation =
   | {
       type: "node.add";
@@ -14,7 +19,13 @@ export type EditorOperation =
       type: "node.remove";
       node: FormulaNode;
       index: number;
-      connectedEdges: FormulaEdge[];
+      connectedEdges: IndexedFormulaEdge[];
+    }
+  | {
+      type: "node.restore";
+      node: FormulaNode;
+      index: number;
+      connectedEdges: IndexedFormulaEdge[];
     }
   | {
       type: "edge.add";
@@ -45,6 +56,7 @@ function insertAt<T>(
   index: number
 ): T[] {
   const nextValues = [...values];
+
   const safeIndex = Math.max(
     0,
     Math.min(index, nextValues.length)
@@ -53,6 +65,32 @@ function insertAt<T>(
   nextValues.splice(safeIndex, 0, value);
 
   return nextValues;
+}
+
+function restoreConnectedEdges(
+  existingEdges: FormulaEdge[],
+  connectedEdges: IndexedFormulaEdge[]
+): FormulaEdge[] {
+  return [...connectedEdges]
+    .sort((left, right) => left.index - right.index)
+    .reduce(
+      (edges, indexedEdge) => {
+        const alreadyExists = edges.some(
+          (edge) => edge.id === indexedEdge.edge.id
+        );
+
+        if (alreadyExists) {
+          return edges;
+        }
+
+        return insertAt(
+          edges,
+          indexedEdge.edge,
+          indexedEdge.index
+        );
+      },
+      [...existingEdges]
+    );
 }
 
 export function applyEditorOperation(
@@ -73,11 +111,13 @@ export function applyEditorOperation(
 
       return {
         ...document,
+
         nodes: insertAt(
           document.nodes,
           operation.node,
           operation.index
         ),
+
         updatedAt
       };
     }
@@ -85,14 +125,44 @@ export function applyEditorOperation(
     case "node.remove": {
       return {
         ...document,
+
         nodes: document.nodes.filter(
           (node) => node.id !== operation.node.id
         ),
+
         edges: document.edges.filter(
           (edge) =>
             edge.source.nodeId !== operation.node.id &&
             edge.target.nodeId !== operation.node.id
         ),
+
+        updatedAt
+      };
+    }
+
+    case "node.restore": {
+      const nodeAlreadyExists = document.nodes.some(
+        (node) => node.id === operation.node.id
+      );
+
+      const nodes = nodeAlreadyExists
+        ? document.nodes
+        : insertAt(
+            document.nodes,
+            operation.node,
+            operation.index
+          );
+
+      return {
+        ...document,
+
+        nodes,
+
+        edges: restoreConnectedEdges(
+          document.edges,
+          operation.connectedEdges
+        ),
+
         updatedAt
       };
     }
@@ -108,11 +178,13 @@ export function applyEditorOperation(
 
       return {
         ...document,
+
         edges: insertAt(
           document.edges,
           operation.edge,
           operation.index
         ),
+
         updatedAt
       };
     }
@@ -120,9 +192,11 @@ export function applyEditorOperation(
     case "edge.remove": {
       return {
         ...document,
+
         edges: document.edges.filter(
           (edge) => edge.id !== operation.edge.id
         ),
+
         updatedAt
       };
     }
@@ -138,6 +212,7 @@ export function applyEditorOperation(
 
       return {
         ...document,
+
         nodes: document.nodes.map((node) =>
           node.id === operation.nodeId
             ? {
@@ -147,6 +222,7 @@ export function applyEditorOperation(
               }
             : node
         ),
+
         updatedAt
       };
     }
@@ -167,9 +243,18 @@ export function invertEditorOperation(
 
     case "node.remove":
       return {
-        type: "node.add",
+        type: "node.restore",
         node: operation.node,
-        index: operation.index
+        index: operation.index,
+        connectedEdges: operation.connectedEdges
+      };
+
+    case "node.restore":
+      return {
+        type: "node.remove",
+        node: operation.node,
+        index: operation.index,
+        connectedEdges: operation.connectedEdges
       };
 
     case "edge.add":

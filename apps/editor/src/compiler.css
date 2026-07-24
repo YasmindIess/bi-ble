@@ -228,3 +228,77 @@
   color: var(--quiet);
   font-size: 7px;
 }
+
+.compiler-disclosure {
+  margin-top: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #fafbfc;
+}
+
+.compiler-disclosure > summary {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 9px;
+  cursor: pointer;
+  list-style: none;
+  color: #59616c;
+  font-size: 8px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.compiler-disclosure > summary::-webkit-details-marker,
+.tribunal-summary::-webkit-details-marker {
+  display: none;
+}
+
+.compiler-disclosure > summary strong {
+  min-width: 21px;
+  height: 21px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  color: #646d78;
+  background: #eceff2;
+  font-size: 8px;
+}
+
+.compiler-disclosure[open] > summary {
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.compiler-disclosure-body {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+}
+
+.tribunal-summary {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.tribunal-card[open] .tribunal-summary {
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.tribunal-detail-body {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+}
+
+.tribunal-clear {
+  padding: 7px;
+  border-radius: 6px;
+  color: var(--safe);
+  background: var(--safe-soft);
+  font-size: 7px;
+}

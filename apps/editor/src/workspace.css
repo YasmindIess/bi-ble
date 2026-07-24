@@ -1,0 +1,162 @@
+.editor-app {
+  min-width: 760px;
+}
+
+.editor-layout {
+  grid-template-columns:
+    clamp(188px, 14vw, 232px)
+    minmax(0, 1fr)
+    clamp(258px, 21vw, 330px);
+
+  grid-template-rows:
+    minmax(0, 1fr)
+    clamp(148px, 20vh, 194px);
+}
+
+.palette-panel,
+.inspector-panel,
+.dock-panel {
+  min-height: 0;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.inspector-panel {
+  overflow: auto;
+}
+
+.compiler-card {
+  margin-bottom: 12px;
+}
+
+.bottom-dock {
+  min-width: 0;
+}
+
+.dock-panel {
+  overflow: auto;
+}
+
+.danger-tool:not(:disabled) {
+  color: #8b493e;
+  border-color: #e3c7c1;
+  background: #fff8f6;
+  cursor: pointer;
+}
+
+.danger-tool:not(:disabled):hover {
+  border-color: #d49e94;
+  background: #fbedE9;
+}
+
+@media (max-width: 1280px) {
+  .topbar {
+    grid-template-columns:
+      minmax(210px, 1fr)
+      auto;
+  }
+
+  .topbar-status {
+    display: none;
+  }
+
+  .editor-layout {
+    grid-template-columns:
+      190px
+      minmax(0, 1fr)
+      270px;
+  }
+
+  .palette-panel {
+    padding-inline: 11px;
+  }
+
+  .panel-description {
+    margin-bottom: 12px;
+  }
+
+  .palette-groups {
+    gap: 14px;
+  }
+}
+
+@media (max-width: 980px) {
+  .editor-app {
+    min-width: 760px;
+  }
+
+  .topbar {
+    height: 58px;
+    padding-inline: 12px;
+  }
+
+  .brand span {
+    display: none;
+  }
+
+  .topbar-actions {
+    gap: 5px;
+  }
+
+  .topbar-actions button {
+    padding-inline: 9px;
+  }
+
+  .editor-layout {
+    height: calc(100vh - 58px);
+
+    grid-template-columns:
+      170px
+      minmax(0, 1fr)
+      238px;
+  }
+
+  .palette-panel,
+  .inspector-panel {
+    padding: 12px 10px;
+  }
+
+  .panel-description {
+    display: none;
+  }
+
+  .palette-item {
+    height: 32px;
+    font-size: 10px;
+  }
+
+  .compiler-card {
+    padding: 10px;
+  }
+
+  .canvas-stage {
+    padding: 9px;
+  }
+}
+
+@media (max-height: 800px) {
+  .topbar {
+    height: 56px;
+  }
+
+  .editor-layout {
+    height: calc(100vh - 56px);
+
+    grid-template-rows:
+      minmax(0, 1fr)
+      146px;
+  }
+
+  .surface-toolbar {
+    height: 42px;
+  }
+
+  .palette-panel,
+  .inspector-panel {
+    padding-top: 12px;
+  }
+
+  .empty-panel-state {
+    min-height: 130px;
+  }
+}
