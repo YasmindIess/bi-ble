@@ -28,6 +28,8 @@ const CACHE_DURATION_MS = 60_000;
 let cachedResponse = null;
 let cachedAt = 0;
 
+const revisionCache = new Map();
+
 function sendJson(
   response,
   status,
@@ -328,6 +330,314 @@ async function publicRepositoryPayload() {
   };
 }
 
+
+function parseRepositoryFullName(
+  candidate
+) {
+  if (
+    typeof candidate !== "string"
+  ) {
+    return null;
+  }
+
+  const match = candidate
+    .trim()
+    .match(
+      /^([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+)$/
+    );
+
+  if (match === null) {
+    return null;
+  }
+
+  return {
+    owner: match[1],
+    name: match[2],
+    fullName: `${match[1]}/${match[2]}`
+  };
+}
+
+function githubRequestHeaders() {
+  const token =
+    process.env.GITHUB_TOKEN ??
+    process.env.GH_TOKEN;
+
+  const headers = {
+    "Accept":
+      "application/vnd.github+json",
+
+    "User-Agent":
+      "bi-ble-formula-surface",
+
+    "X-GitHub-Api-Version":
+      "2022-11-28"
+  };
+
+  if (
+    typeof token === "string" &&
+    token !== ""
+  ) {
+    headers.Authorization =
+      `Bearer ${token}`;
+  }
+
+  return headers;
+}
+
+async function readGitHubJson(
+  url
+) {
+  const response = await fetch(
+    url,
+    {
+      headers:
+        githubRequestHeaders()
+    }
+  );
+
+  if (!response.ok) {
+    let detail =
+      `${response.status} ` +
+      response.statusText;
+
+    try {
+      const body =
+        await response.json();
+
+      if (
+        typeof body?.message ===
+        "string"
+      ) {
+        detail = body.message;
+      }
+    } catch {
+      // Retain the bounded HTTP detail.
+    }
+
+    throw new Error(
+      `GitHub request failed: ${detail}`
+    );
+  }
+
+  return response.json();
+}
+
+function firstMessageLine(
+  message
+) {
+  if (
+    typeof message !== "string"
+  ) {
+    return "(no commit message)";
+  }
+
+  const firstLine =
+    message.split(/\r?\n/, 1)[0].trim();
+
+  return firstLine === ""
+    ? "(no commit message)"
+    : firstLine;
+}
+
+async function publicRevisionPayload(
+  repositoryCandidate
+) {
+  const repository =
+    parseRepositoryFullName(
+      repositoryCandidate
+    );
+
+  if (repository === null) {
+    throw new Error(
+      "Repository must use the owner/name form."
+    );
+  }
+
+  const detectedOwner =
+    await detectOwner();
+
+  if (
+    repository.owner.toLowerCase() !==
+    detectedOwner.owner.toLowerCase()
+  ) {
+    throw new Error(
+      "Repository owner does not match the " +
+        "GitHub owner attached to this Codespace."
+    );
+  }
+
+  const cacheKey =
+    repository.fullName.toLowerCase();
+
+  const cached =
+    revisionCache.get(cacheKey);
+
+  const now = Date.now();
+
+  if (
+    cached !== undefined &&
+    now - cached.cachedAt <
+      CACHE_DURATION_MS
+  ) {
+    return {
+      ...cached.payload,
+      cache: "hit"
+    };
+  }
+
+  const encodedOwner =
+    encodeURIComponent(
+      repository.owner
+    );
+
+  const encodedName =
+    encodeURIComponent(
+      repository.name
+    );
+
+  const metadata =
+    await readGitHubJson(
+      "https://api.github.com/repos/" +
+        `${encodedOwner}/${encodedName}`
+    );
+
+  if (
+    metadata === null ||
+    typeof metadata !== "object" ||
+    metadata.private === true
+  ) {
+    throw new Error(
+      "The selected repository is not public."
+    );
+  }
+
+  const defaultBranch =
+    typeof metadata.default_branch ===
+    "string"
+      ? metadata.default_branch
+      : "";
+
+  if (defaultBranch === "") {
+    throw new Error(
+      "The repository has no detectable default branch."
+    );
+  }
+
+  const commits =
+    await readGitHubJson(
+      "https://api.github.com/repos/" +
+        `${encodedOwner}/${encodedName}` +
+        "/commits" +
+        `?sha=${encodeURIComponent(defaultBranch)}` +
+        "&per_page=40"
+    );
+
+  if (!Array.isArray(commits)) {
+    throw new Error(
+      "GitHub returned an unexpected revision payload."
+    );
+  }
+
+  const revisions = commits.flatMap(
+    (entry) => {
+      if (
+        entry === null ||
+        typeof entry !== "object" ||
+        typeof entry.sha !== "string"
+      ) {
+        return [];
+      }
+
+      const commit =
+        entry.commit !== null &&
+        typeof entry.commit === "object"
+          ? entry.commit
+          : {};
+
+      const author =
+        commit.author !== null &&
+        typeof commit.author === "object"
+          ? commit.author
+          : {};
+
+      const committer =
+        commit.committer !== null &&
+        typeof commit.committer === "object"
+          ? commit.committer
+          : {};
+
+      const authorName =
+        typeof author.name === "string"
+          ? author.name
+          : (
+              typeof committer.name === "string"
+                ? committer.name
+                : (
+                    entry.author !== null &&
+                    typeof entry.author === "object" &&
+                    typeof entry.author.login === "string"
+                      ? entry.author.login
+                      : "Unknown author"
+                  )
+            );
+
+      const committedAt =
+        typeof committer.date === "string"
+          ? committer.date
+          : (
+              typeof author.date === "string"
+                ? author.date
+                : ""
+            );
+
+      return [
+        {
+          sha: entry.sha,
+          shortSha:
+            entry.sha.slice(0, 7),
+
+          summary: firstMessageLine(
+            commit.message
+          ),
+
+          author: authorName,
+          committedAt,
+
+          htmlUrl:
+            typeof entry.html_url === "string"
+              ? entry.html_url
+              : ""
+        }
+      ];
+    }
+  );
+
+  const payload = {
+    schemaVersion: 1,
+    repository:
+      repository.fullName,
+
+    defaultBranch,
+    fetchedAt:
+      new Date().toISOString(),
+
+    revisions
+  };
+
+  revisionCache.set(
+    cacheKey,
+    {
+      cachedAt: now,
+      payload
+    }
+  );
+
+  return {
+    ...payload,
+    cache: "miss"
+  };
+}
+
 const server = createServer(
   async (
     request,
@@ -395,6 +705,45 @@ const server = createServer(
               error instanceof Error
                 ? error.message
                 : "Repository discovery failed."
+          }
+        );
+      }
+
+      return;
+    }
+
+    if (
+      requestUrl.pathname ===
+      "/api/github/public-revisions"
+    ) {
+      try {
+        const repository =
+          requestUrl.searchParams.get(
+            "repository"
+          ) ?? "";
+
+        const payload =
+          await publicRevisionPayload(
+            repository
+          );
+
+        sendJson(
+          response,
+          200,
+          payload
+        );
+      } catch (error) {
+        sendJson(
+          response,
+          502,
+          {
+            error:
+              "revision_discovery_failed",
+
+            message:
+              error instanceof Error
+                ? error.message
+                : "Revision discovery failed."
           }
         );
       }

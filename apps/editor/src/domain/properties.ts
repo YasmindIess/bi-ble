@@ -18,7 +18,8 @@ export type PropertyEditorKind =
   | "number"
   | "select"
   | "boolean"
-  | "repository";
+  | "repository"
+  | "revision";
 
 export interface PropertyOption {
   value: string;
@@ -442,7 +443,7 @@ const definitions: Record<
     {
       key: "revision",
       label: "Commit or revision",
-      editor: "text",
+      editor: "revision",
       defaultValue: ""
     }
   ],

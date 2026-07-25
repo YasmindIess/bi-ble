@@ -14,6 +14,10 @@ import {
 } from "./RepositorySelector";
 
 import {
+  RevisionSelector
+} from "./RevisionSelector";
+
+import {
   getPropertyDefinitions,
   resolveNodeProperties,
   type FormulaProperties,
@@ -40,12 +44,31 @@ function valuesEqual(
 function PropertyField({
   field,
   value,
+  properties,
   onChange
 }: {
   field: PropertyFieldDefinition;
   value: FormulaPropertyValue;
+  properties: FormulaProperties;
   onChange: (value: FormulaPropertyValue) => void;
 }) {
+  if (field.editor === "revision") {
+    return (
+      <RevisionSelector
+        repository={
+          typeof properties.repository ===
+          "string"
+            ? properties.repository
+            : ""
+        }
+        value={String(value ?? "")}
+        onChange={(revision) => {
+          onChange(revision);
+        }}
+      />
+    );
+  }
+
   if (field.editor === "repository") {
     return (
       <RepositorySelector
@@ -205,10 +228,23 @@ export function NodePropertyEditor({
     key: string,
     value: FormulaPropertyValue
   ) => {
-    setDraft((current) => ({
-      ...current,
-      [key]: value
-    }));
+    setDraft((current) => {
+      if (
+        key === "repository" &&
+        current.repository !== value
+      ) {
+        return {
+          ...current,
+          repository: value,
+          revision: ""
+        };
+      }
+
+      return {
+        ...current,
+        [key]: value
+      };
+    });
   };
 
   const handleSubmit = async (
@@ -263,6 +299,7 @@ export function NodePropertyEditor({
               draft[field.key] ??
               field.defaultValue
             }
+            properties={draft}
             onChange={(value) => {
               setProperty(field.key, value);
             }}
