@@ -129,3 +129,81 @@
   border-color: #303946;
   background: #303946;
 }
+
+.repository-selector {
+  display: grid;
+  gap: 5px;
+}
+
+.repository-selector-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.repository-selector-heading > span {
+  color: #707985;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.repository-selector-heading button {
+  min-height: 25px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: #626b76;
+  background: #ffffff;
+  font-size: 8px;
+}
+
+.repository-selector-heading button:disabled {
+  opacity: 0.55;
+}
+
+.repository-selector select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: #343b44;
+  background: #ffffff;
+  font: inherit;
+  font-size: 9px;
+  outline: none;
+}
+
+.repository-selector select:focus {
+  border-color: #7e8997;
+  box-shadow:
+    0 0 0 2px
+    rgba(82, 94, 109, 0.1);
+}
+
+.repository-selector-status {
+  min-height: 27px;
+  display: flex;
+  align-items: center;
+  padding: 6px 7px;
+  border-radius: 7px;
+  font-size: 7px;
+  line-height: 1.4;
+}
+
+.repository-selector-loading {
+  color: #68727e;
+  background: #f2f4f6;
+}
+
+.repository-selector-ready {
+  color: var(--safe);
+  background: var(--safe-soft);
+}
+
+.repository-selector-error {
+  color: #864b41;
+  background: #fbefec;
+}

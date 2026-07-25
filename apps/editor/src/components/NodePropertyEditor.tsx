@@ -10,6 +10,10 @@ import type {
 } from "../model/document";
 
 import {
+  RepositorySelector
+} from "./RepositorySelector";
+
+import {
   getPropertyDefinitions,
   resolveNodeProperties,
   type FormulaProperties,
@@ -42,6 +46,17 @@ function PropertyField({
   value: FormulaPropertyValue;
   onChange: (value: FormulaPropertyValue) => void;
 }) {
+  if (field.editor === "repository") {
+    return (
+      <RepositorySelector
+        value={String(value ?? "")}
+        onChange={(repository) => {
+          onChange(repository);
+        }}
+      />
+    );
+  }
+
   if (field.editor === "boolean") {
     return (
       <label className="property-checkbox">

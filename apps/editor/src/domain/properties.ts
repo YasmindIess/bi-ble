@@ -17,7 +17,8 @@ export type PropertyEditorKind =
   | "textarea"
   | "number"
   | "select"
-  | "boolean";
+  | "boolean"
+  | "repository";
 
 export interface PropertyOption {
   value: string;
@@ -435,7 +436,7 @@ const definitions: Record<
     {
       key: "repository",
       label: "Repository",
-      editor: "text",
+      editor: "repository",
       defaultValue: ""
     },
     {

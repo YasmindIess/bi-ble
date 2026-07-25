@@ -3,8 +3,10 @@
   "private": true,
   "packageManager": "pnpm@11.17.0",
   "scripts": {
-    "editor:dev": "pnpm --dir apps/editor dev",
+    "editor:dev": "bash scripts/editor-dev.sh",
     "editor:build": "pnpm --dir apps/editor build",
-    "editor:lint": "pnpm --dir apps/editor lint"
+    "editor:lint": "pnpm --dir apps/editor lint",
+    "editor:adapter": "node tools/github-public-repos.mjs",
+    "editor:web": "pnpm --dir apps/editor dev --host 0.0.0.0"
   }
 }
