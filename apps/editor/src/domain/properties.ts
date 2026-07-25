@@ -488,6 +488,96 @@ const definitions: Record<
       label: "Verified",
       editor: "boolean",
       defaultValue: false
+    },
+    {
+      key: "repository",
+      label: "Repository",
+      editor: "text",
+      defaultValue: ""
+    },
+    {
+      key: "revision",
+      label: "Immutable revision",
+      editor: "text",
+      defaultValue: ""
+    },
+    {
+      key: "parentRevisions",
+      label: "Parent revisions",
+      editor: "textarea",
+      defaultValue: ""
+    },
+    {
+      key: "commitSummary",
+      label: "Commit summary",
+      editor: "textarea",
+      defaultValue: ""
+    },
+    {
+      key: "author",
+      label: "Author",
+      editor: "text",
+      defaultValue: ""
+    },
+    {
+      key: "committedAt",
+      label: "Committed at",
+      editor: "text",
+      defaultValue: ""
+    },
+    {
+      key: "commitUrl",
+      label: "Commit URL",
+      editor: "text",
+      defaultValue: ""
+    },
+    {
+      key: "changedPathCount",
+      label: "Changed path count",
+      editor: "number",
+      defaultValue: 0
+    },
+    {
+      key: "additions",
+      label: "Additions",
+      editor: "number",
+      defaultValue: 0
+    },
+    {
+      key: "deletions",
+      label: "Deletions",
+      editor: "number",
+      defaultValue: 0
+    },
+    {
+      key: "changedPaths",
+      label: "Changed paths",
+      editor: "textarea",
+      defaultValue: ""
+    },
+    {
+      key: "fileSummary",
+      label: "Bounded file manifest",
+      editor: "textarea",
+      defaultValue: ""
+    },
+    {
+      key: "evidenceDigest",
+      label: "Evidence digest",
+      editor: "text",
+      defaultValue: ""
+    },
+    {
+      key: "filesTruncated",
+      label: "File manifest truncated",
+      editor: "boolean",
+      defaultValue: false
+    },
+    {
+      key: "verificationScope",
+      label: "Verification scope",
+      editor: "text",
+      defaultValue: ""
     }
   ],
 

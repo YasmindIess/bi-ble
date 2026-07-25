@@ -1,0 +1,165 @@
+.commit-evidence-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px 0;
+  border-top: 1px solid var(--line, #dde3ea);
+}
+
+.commit-evidence-heading,
+.commit-evidence-candidate-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.commit-evidence-heading > div,
+.commit-evidence-candidate-title > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.commit-evidence-panel p {
+  margin: 0;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.commit-evidence-scope,
+.evidence-candidate-status {
+  flex: none;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef3f7;
+  color: #52606f;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.commit-evidence-selection,
+.commit-evidence-facts {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+}
+
+.commit-evidence-selection > div {
+  display: grid;
+  gap: 3px;
+}
+
+.commit-evidence-selection dt,
+.commit-evidence-facts dt {
+  color: #8490a0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.commit-evidence-selection dd,
+.commit-evidence-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #202a36;
+  font-size: 12px;
+}
+
+.commit-evidence-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.commit-evidence-message {
+  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.evidence-error {
+  border: 1px solid #edc9c2;
+  background: #fff0ed;
+  color: #8c3326;
+}
+
+.commit-evidence-candidate {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid #c9ded5;
+  border-radius: 12px;
+  background: #f4fbf7;
+}
+
+.commit-evidence-candidate-title span {
+  overflow: hidden;
+  color: #52606f;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evidence-candidate-status {
+  background: #dff2e7;
+  color: #1f704b;
+}
+
+.commit-evidence-facts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.commit-evidence-facts > div {
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.commit-evidence-paths {
+  display: grid;
+  gap: 5px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.commit-evidence-paths > div {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 7px;
+  align-items: center;
+  font-size: 10px;
+}
+
+.commit-evidence-paths span {
+  color: #6c7785;
+  text-transform: uppercase;
+}
+
+.commit-evidence-paths code,
+.commit-evidence-digest code {
+  overflow-wrap: anywhere;
+  font-size: 10px;
+}
+
+.commit-evidence-paths small {
+  color: #697586;
+}
+
+.commit-evidence-digest {
+  display: grid;
+  gap: 5px;
+  padding-top: 11px;
+  border-top: 1px solid #d7e7df;
+}
+
+.commit-evidence-digest span {
+  color: #6c7785;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}

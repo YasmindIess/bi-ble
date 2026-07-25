@@ -239,3 +239,191 @@ export async function loadPublicRevisions(
 
   return payload;
 }
+
+export interface PublicCommitEvidenceFile {
+  path: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  changes: number;
+  previousPath: string | null;
+}
+
+export interface PublicCommitEvidence {
+  schemaVersion: 1;
+  source: "github_public_commit_api";
+  repository: string;
+  revision: string;
+  shortRevision: string;
+  parentRevisions: string[];
+  summary: string;
+  author: string;
+  committedAt: string;
+  htmlUrl: string;
+
+  stats: {
+    additions: number;
+    deletions: number;
+    total: number;
+  };
+
+  fileCount: number;
+  filesTruncated: boolean;
+  files: PublicCommitEvidenceFile[];
+  evidenceDigest: string;
+}
+
+export interface PublicCommitEvidenceResponse {
+  schemaVersion: 1;
+  fetchedAt: string;
+  evidence: PublicCommitEvidence;
+}
+
+function isPublicCommitEvidenceFile(
+  value: unknown
+): value is PublicCommitEvidenceFile {
+  if (
+    typeof value !== "object" ||
+    value === null
+  ) {
+    return false;
+  }
+
+  const candidate =
+    value as Record<string, unknown>;
+
+  return (
+    typeof candidate.path === "string" &&
+    typeof candidate.status === "string" &&
+    typeof candidate.additions === "number" &&
+    typeof candidate.deletions === "number" &&
+    typeof candidate.changes === "number" &&
+    (
+      candidate.previousPath === null ||
+      typeof candidate.previousPath === "string"
+    )
+  );
+}
+
+function isPublicCommitEvidence(
+  value: unknown
+): value is PublicCommitEvidence {
+  if (
+    typeof value !== "object" ||
+    value === null
+  ) {
+    return false;
+  }
+
+  const candidate =
+    value as Record<string, unknown>;
+
+  const stats =
+    candidate.stats as
+      | Record<string, unknown>
+      | undefined;
+
+  return (
+    candidate.schemaVersion === 1 &&
+    candidate.source ===
+      "github_public_commit_api" &&
+    typeof candidate.repository === "string" &&
+    typeof candidate.revision === "string" &&
+    typeof candidate.shortRevision === "string" &&
+    Array.isArray(candidate.parentRevisions) &&
+    candidate.parentRevisions.every(
+      (revision) =>
+        typeof revision === "string"
+    ) &&
+    typeof candidate.summary === "string" &&
+    typeof candidate.author === "string" &&
+    typeof candidate.committedAt === "string" &&
+    typeof candidate.htmlUrl === "string" &&
+    typeof stats === "object" &&
+    stats !== null &&
+    typeof stats.additions === "number" &&
+    typeof stats.deletions === "number" &&
+    typeof stats.total === "number" &&
+    typeof candidate.fileCount === "number" &&
+    typeof candidate.filesTruncated === "boolean" &&
+    Array.isArray(candidate.files) &&
+    candidate.files.every(
+      isPublicCommitEvidenceFile
+    ) &&
+    typeof candidate.evidenceDigest === "string"
+  );
+}
+
+function isPublicCommitEvidenceResponse(
+  value: unknown
+): value is PublicCommitEvidenceResponse {
+  if (
+    typeof value !== "object" ||
+    value === null
+  ) {
+    return false;
+  }
+
+  const candidate =
+    value as Record<string, unknown>;
+
+  return (
+    candidate.schemaVersion === 1 &&
+    typeof candidate.fetchedAt === "string" &&
+    isPublicCommitEvidence(
+      candidate.evidence
+    )
+  );
+}
+
+export async function loadPublicCommitEvidence(
+  repository: string,
+  revision: string,
+  signal?: AbortSignal
+): Promise<PublicCommitEvidenceResponse> {
+  const query = new URLSearchParams({
+    repository,
+    revision
+  });
+
+  const response = await fetch(
+    "/api/github/public-commit-evidence?" +
+      query.toString(),
+    {
+      method: "GET",
+
+      headers: {
+        "Accept": "application/json"
+      },
+
+      signal
+    }
+  );
+
+  const payload: unknown =
+    await response.json();
+
+  if (!response.ok) {
+    const message =
+      typeof payload === "object" &&
+      payload !== null &&
+      "message" in payload &&
+      typeof payload.message === "string"
+        ? payload.message
+        : "Commit evidence could not be loaded.";
+
+    throw new Error(message);
+  }
+
+  if (
+    !isPublicCommitEvidenceResponse(
+      payload
+    )
+  ) {
+    throw new Error(
+      "The commit evidence adapter returned an invalid payload."
+    );
+  }
+
+  return payload;
+}

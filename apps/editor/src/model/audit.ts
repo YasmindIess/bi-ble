@@ -12,11 +12,26 @@ export interface PointerGestureFacts {
   efficiencyRatio: number;
 }
 
+export interface CommitEvidenceAuditFacts {
+  sourceNodeId: string;
+  evidenceNodeId: string;
+  repository: string;
+  revision: string;
+  evidenceDigest: string;
+  parentRevisions: string[];
+  changedPathCount: number;
+  additions: number;
+  deletions: number;
+  filesTruncated: boolean;
+}
+
 export interface OperationAuditContext {
   pointerGesture?: Omit<
     PointerGestureFacts,
     "efficiencyRatio"
   >;
+
+  commitEvidence?: CommitEvidenceAuditFacts;
 }
 
 export interface AuditInterpretation {
@@ -39,6 +54,7 @@ export interface AuditReceipt {
     beforeDigest: string;
     afterDigest: string;
     pointerGesture?: PointerGestureFacts;
+    commitEvidence?: CommitEvidenceAuditFacts;
   };
   interpretations: AuditInterpretation[];
 }
@@ -155,14 +171,26 @@ export function createAuditReceipt(
     });
   }
 
+  const commitEvidence =
+    input.context?.commitEvidence;
+
+  const subjectIds = subjectIdsForOperation(
+    input.operation
+  );
+
+  if (commitEvidence !== undefined) {
+    subjectIds.push(
+      commitEvidence.sourceNodeId,
+      commitEvidence.evidenceNodeId
+    );
+  }
+
   return {
     id: createId("audit"),
     operationId: input.operationId,
     operationLabel: input.operationLabel,
     operationType: input.operation.type,
-    subjectIds: subjectIdsForOperation(
-      input.operation
-    ),
+    subjectIds: [...new Set(subjectIds)],
     decision: "admitted",
     recordedAt: input.recordedAt,
     facts: {

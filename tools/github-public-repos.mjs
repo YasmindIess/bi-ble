@@ -3,6 +3,10 @@ import {
 } from "node:http";
 
 import {
+  loadPublicCommitEvidence
+} from "./github-commit-evidence.mjs";
+
+import {
   execFile
 } from "node:child_process";
 
@@ -750,6 +754,58 @@ const server = createServer(
 
       return;
     }
+
+    if (
+      request.method === "GET" &&
+      requestUrl.pathname ===
+        "/api/github/public-commit-evidence"
+    ) {
+      const repository =
+        requestUrl.searchParams.get(
+          "repository"
+        ) ?? "";
+
+      const revision =
+        requestUrl.searchParams.get(
+          "revision"
+        ) ?? "";
+
+      try {
+        const evidence =
+          await loadPublicCommitEvidence({
+            repository,
+            revision,
+            token: process.env.GITHUB_TOKEN
+          });
+
+        sendJson(
+          response,
+          200,
+          {
+            schemaVersion: 1,
+            fetchedAt:
+              new Date().toISOString(),
+            evidence
+          }
+        );
+      } catch (error) {
+        sendJson(
+          response,
+          400,
+          {
+            schemaVersion: 1,
+            message:
+              error instanceof Error
+                ? error.message
+                : "Commit evidence could not be loaded."
+          }
+        );
+      }
+
+      return;
+    }
+
+
 
     sendJson(
       response,

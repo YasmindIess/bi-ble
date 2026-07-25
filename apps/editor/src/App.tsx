@@ -14,6 +14,7 @@ import "./audit.css";
 import "./compiler.css";
 import "./workspace.css";
 import "./properties.css";
+import "./evidence.css";
 import "./layout-responsibility.css";
 
 import {
@@ -36,6 +37,10 @@ import {
 import {
   NodePropertyEditor
 } from "./components/NodePropertyEditor";
+
+import {
+  CommitEvidencePanel
+} from "./components/CommitEvidencePanel";
 
 import {
   paletteGroups,
@@ -87,6 +92,10 @@ import {
   compileFormula,
   type CompilationResult
 } from "./model/compiler";
+
+import type {
+  PublicCommitEvidence
+} from "./integrations/github";
 
 interface ConnectionFeedback {
   kind: "ready" | "admitted" | "blocked";
@@ -371,6 +380,116 @@ function App() {
       message:
         `Updated semantic properties for ` +
         `${node.label}.`
+    });
+  };
+
+
+  const handleMaterializeCommitEvidence = async (
+    sourceNode: FormulaNode,
+    evidenceNode: FormulaNode,
+    evidence: PublicCommitEvidence
+  ) => {
+    const previousProperties = {
+      ...(evidenceNode.properties ?? {})
+    };
+
+    const fileSummary = JSON.stringify(
+      evidence.files.map((file) => ({
+        path: file.path,
+        status: file.status,
+        additions: file.additions,
+        deletions: file.deletions,
+        changes: file.changes,
+        previousPath: file.previousPath
+      })),
+      null,
+      2
+    );
+
+    const nextProperties: FormulaProperties = {
+      ...previousProperties,
+      evidenceType: "diff",
+
+      sourceRef:
+        `github:${evidence.repository}` +
+        `@${evidence.revision}`,
+
+      verified: true,
+      repository: evidence.repository,
+      revision: evidence.revision,
+
+      parentRevisions:
+        evidence.parentRevisions.join("\n"),
+
+      commitSummary: evidence.summary,
+      author: evidence.author,
+      committedAt: evidence.committedAt,
+      commitUrl: evidence.htmlUrl,
+      changedPathCount: evidence.fileCount,
+      additions: evidence.stats.additions,
+      deletions: evidence.stats.deletions,
+
+      changedPaths:
+        evidence.files
+          .map((file) => file.path)
+          .join("\n"),
+
+      fileSummary,
+      evidenceDigest: evidence.evidenceDigest,
+      filesTruncated: evidence.filesTruncated,
+
+      verificationScope:
+        "public_github_api_commit_metadata"
+    };
+
+    await commitOperation(
+      {
+        type: "node.properties.update",
+        nodeId: evidenceNode.id,
+        from: previousProperties,
+        to: nextProperties
+      },
+
+      `Materialize commit evidence ` +
+        `${evidence.shortRevision}`,
+
+      {
+        commitEvidence: {
+          sourceNodeId: sourceNode.id,
+          evidenceNodeId: evidenceNode.id,
+          repository: evidence.repository,
+          revision: evidence.revision,
+          evidenceDigest:
+            evidence.evidenceDigest,
+
+          parentRevisions:
+            evidence.parentRevisions,
+
+          changedPathCount:
+            evidence.fileCount,
+
+          additions:
+            evidence.stats.additions,
+
+          deletions:
+            evidence.stats.deletions,
+
+          filesTruncated:
+            evidence.filesTruncated
+        }
+      }
+    );
+
+    setSelectedNodeId(evidenceNode.id);
+
+    setConnectionFeedback({
+      kind: "admitted",
+
+      message:
+        `Materialized ${evidence.fileCount} ` +
+        `changed path${
+          evidence.fileCount === 1 ? "" : "s"
+        } as deterministic evidence.`
     });
   };
 
@@ -822,6 +941,19 @@ function App() {
                 node={selectedNode}
                 onCommit={handleNodePropertiesCommit}
               />
+
+
+              {selectedNode.domain === "ael" &&
+                selectedNode.kind ===
+                  "repository-event" && (
+                  <CommitEvidencePanel
+                    sourceNode={selectedNode}
+                    document={document}
+                    onMaterialize={
+                      handleMaterializeCommitEvidence
+                    }
+                  />
+                )}
 
               <div className="inspector-port-list">
                 {selectedNode.ports.map((port) => (
