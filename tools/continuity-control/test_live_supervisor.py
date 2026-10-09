@@ -13,6 +13,56 @@ spec.loader.exec_module(mod)
 
 
 class SupervisorSafetyTests(TestCase):
+    def test_repair_missing_runner_helpers_without_touching_credentials(self):
+        with TemporaryDirectory() as temp:
+            home=Path(temp)
+            source=home / "actions-runner-blochfield"
+            dest=home / "cinema-runner"
+            source.mkdir()
+            dest.mkdir()
+            launcher=b"#!/usr/bin/env bash\\necho launcher\\n"
+            (source / "run.sh").write_bytes(launcher)
+            (dest / "run.sh").write_bytes(launcher)
+            (dest / ".runner").write_text('{"agentName":"cinema"}')
+            (dest / ".credentials").write_text("private credential")
+            for name in ("run-helper.sh.template", "safe_sleep.sh"):
+                (source / name).write_text("#!/bin/bash\\necho helper\\n")
+            with patch.object(mod, "HOME", home), patch.object(mod, "CI_RUNNER", dest):
+                self.assertIsNone(mod.repair_runner_launch_files())
+                self.assertIsNone(mod.repair_runner_launch_files())
+            for name in ("run-helper.sh.template", "safe_sleep.sh"):
+                self.assertEqual((dest / name).read_bytes(), (source / name).read_bytes())
+            self.assertEqual((dest / ".credentials").read_text(), "private credential")
+            self.assertEqual((dest / ".runner").read_text(), '{"agentName":"cinema"}')
+
+    def test_repair_refuses_mismatched_binary_distribution(self):
+        with TemporaryDirectory() as temp:
+            home=Path(temp)
+            source=home / "actions-runner-blochfield"
+            dest=home / "cinema-runner"
+            source.mkdir()
+            dest.mkdir()
+            (source / "run.sh").write_text("source")
+            (dest / "run.sh").write_text("different")
+            (dest / ".runner").write_text("registered")
+            for name in ("run-helper.sh.template", "safe_sleep.sh"):
+                (source / name).write_text("safe")
+            with patch.object(mod, "HOME", home), patch.object(mod, "CI_RUNNER", dest):
+                self.assertIn("no matching trusted runner", mod.repair_runner_launch_files())
+            self.assertFalse((dest / "run-helper.sh.template").exists())
+
+    def test_repair_refuses_helper_symlinks(self):
+        with TemporaryDirectory() as temp:
+            home=Path(temp)
+            dest=home / "cinema-runner"
+            dest.mkdir()
+            (dest / ".runner").write_text("registered")
+            (dest / "run.sh").write_text("launcher")
+            (dest / "run-helper.sh.template").symlink_to("/etc/passwd")
+            (dest / "safe_sleep.sh").write_text("sleep")
+            with patch.object(mod, "HOME", home), patch.object(mod, "CI_RUNNER", dest):
+                self.assertIn("symlink", mod.repair_runner_launch_files())
+
     def test_missing_exact_head_ci_fails_closed(self):
         with patch.object(mod.shutil, "which", return_value="/usr/bin/gh"), \
              patch.object(mod, "run", return_value='{"workflow_runs": []}'):
