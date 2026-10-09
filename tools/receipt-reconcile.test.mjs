@@ -85,3 +85,24 @@ test('repeated receipt does not add witness; conflicting local observations rema
   const b=await verifyReceipt(changed,handoff,proposal);
   assert.equal(reconcileTaskStates(handoff,[a,b])['audit-public-subtree'],'unresolved');
 });
+
+test('exact NICE-ROBIN Python worker emitted fixture bytes cross-language verify',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const url=n=>new URL('../examples/worker-interop-v1/'+n+'.json',import.meta.url);
+  const bytes=async n=>await readFile(url(n),'utf8');
+  const h=decodeWorkerArtifact(await bytes('handoff'));
+  const p=decodeWorkerArtifact(await bytes('proposal'));
+  const pass=decodeWorkerArtifact(await bytes('receipt-pass'));
+  const blocked=decodeWorkerArtifact(await bytes('receipt-blocked'));
+  assert.equal(h.plan_sha256,'6763acdeb2e384facf1d18b91d771a75cfe586d9726a2bf94b13e850ca2f92b2');
+  assert.equal(p.proposal_sha256,'108cb94349c3574099288a0f71288214dc79376f706fc05807f2cd68382ec7f4');
+  assert.equal(pass.receipt_sha256,'821462ec39a8ee16424d2355d5cdc38591208df8595d9e18af38ebe36c56c633');
+  const a=await verifyReceipt(pass,h,p);
+  assert.equal(a.status,'content_integrity_verified');
+  assert.equal(a.witnessed,false);
+  assert.equal(a.authentic_execution,false);
+  const b=await verifyReceipt(blocked,h,p);
+  assert.equal(b.status,'blocked');
+  assert.equal(b.blockers.includes('required:SECURITY.md'),true);
+  assert.equal(reconcileTaskStates(h,[a,b])['audit-public-subtree'],'unresolved');
+});
