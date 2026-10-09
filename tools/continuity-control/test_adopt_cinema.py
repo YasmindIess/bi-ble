@@ -41,6 +41,36 @@ class CinemaAdoptionGuards(TestCase):
                 with self.assertRaisesRegex(RuntimeError, "sensitive"):
                     adopt.select_sources()
 
+    def test_missing_private_repo_is_adoptable_for_authorized_owner(self):
+        from types import SimpleNamespace
+        def fake_command(argv, cwd=None, timeout=120):
+            if argv[:3] == ["gh", "api", "user"]:
+                return "YasmindIess"
+            return ""
+        with patch.object(adopt, "command", side_effect=fake_command), \
+             patch.object(adopt.subprocess, "run", return_value=SimpleNamespace(
+                 returncode=1, stderr="gh: Not Found (HTTP 404)", stdout="")):
+            adopt.verify_private_target_unclaimed()
+
+    def test_existing_private_repo_is_not_overwritten(self):
+        from types import SimpleNamespace
+        with patch.object(adopt, "command", return_value="YasmindIess"), \
+             patch.object(adopt.subprocess, "run", return_value=SimpleNamespace(
+                 returncode=0, stderr="", stdout="{}")):
+            with self.assertRaisesRegex(RuntimeError, "already exists"):
+                adopt.verify_private_target_unclaimed()
+
+    def test_other_gh_failure_does_not_look_like_missing_repo(self):
+        from types import SimpleNamespace
+        with patch.object(adopt, "command", return_value="YasmindIess"), \
+             patch.object(adopt.subprocess, "run", return_value=SimpleNamespace(
+                 returncode=1, stderr="gh: Forbidden (HTTP 403)", stdout="")):
+            with self.assertRaisesRegex(RuntimeError, "not a 404"):
+                adopt.verify_private_target_unclaimed()
+
+    def test_synthetic_png_has_required_magic_bytes(self):
+        self.assertEqual(adopt.synthetic_png()[:8], bytes([137,80,78,71,13,10,26,10]))
+
     def test_missing_application_does_not_adopt(self):
         with TemporaryDirectory() as temp:
             root = Path(temp)
