@@ -163,6 +163,8 @@ def main():
                         managed["ci_workflows"] = exact_ci(CINEMA_REPO, managed["head"], MANAGED_CINEMA)
                         if not (MANAGED_CINEMA / "node_modules/playwright").is_dir() or managed["state"] == "updated":
                             run(["npm", "ci", "--no-audit", "--no-fund"], MANAGED_CINEMA, timeout=180)
+                            run(["npx", "--no-install", "playwright", "install", "chromium"],
+                                MANAGED_CINEMA, timeout=300)
                         managed_ready = True
                     except Exception as exc:
                         managed.update({"state": "held", "reason": "Cinema CI/runtime prerequisite: " + str(exc)[:150]})
