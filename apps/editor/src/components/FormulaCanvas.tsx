@@ -29,6 +29,7 @@ interface NodeMoveResult {
 
 interface FormulaCanvasProps {
   document: EditorDocument;
+  taskStates: Record<string,string>;
   selectedNodeId: string | null;
   tool: EditorTool;
   pendingSource: FormulaEndpoint | null;
@@ -114,6 +115,7 @@ function clampNodePosition(
 
 export function FormulaCanvas({
   document,
+  taskStates,
   selectedNodeId,
   tool,
   pendingSource,
@@ -564,6 +566,16 @@ export function FormulaCanvas({
             >
               {node.domain.toUpperCase()}
             </text>
+            {node.domain === "core" && node.kind === "continuity-task" &&
+              typeof node.properties?.taskId === "string" &&
+              taskStates[node.properties.taskId] && (
+                <g className="continuity-node-evidence">
+                  <title>{`Continuity evidence: ${taskStates[node.properties.taskId]}`}</title>
+                  <circle cx={node.width - 14} cy="14" r="5"
+                    className={`continuity-marker marker-${taskStates[node.properties.taskId]}`}/>
+                </g>
+              )}
+
 
             <text
               x="16"

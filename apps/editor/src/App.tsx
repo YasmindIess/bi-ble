@@ -37,6 +37,7 @@ import {
 } from "./components/CompilerPanel";
 
 import { ContinuityPanel } from "./components/ContinuityPanel";
+import { decodeWorkerArtifact, verifyReceipt, reconcileTaskStates, type WorkerReceipt, type ReceiptObservation } from "./model/receipt-reconcile.mjs";
 import { exportContinuityHandoff, type ContinuityHandoff } from "./model/continuity-export.mjs";
 
 import {
@@ -147,6 +148,56 @@ function App() {
   const [handoff, setHandoff] = useState<ContinuityHandoff | null>(null);
   const [handoffError, setHandoffError] = useState<string | null>(null);
   const [isGeneratingHandoff, setIsGeneratingHandoff] = useState(false);
+  // Worker evidence is a separate local artifact collection, never an editor operation
+  // or an approval. Revalidate untrusted browser storage on every handoff change.
+  const [workerArtifacts,setWorkerArtifacts] = useState<
+    Array<{receipt:WorkerReceipt;proposal:Record<string,unknown>|null}>
+  >(()=>{
+    try {
+      const raw=localStorage.getItem("bi-ble.continuity.worker-evidence.v1");
+      if(!raw || raw.length>8_000_000)return [];
+      const value:unknown=JSON.parse(raw);
+      return Array.isArray(value)?value.slice(0,16).filter(item=>
+        item && typeof item==="object" && "receipt" in item && "proposal" in item
+      ):[];
+    } catch {return [];}
+  });
+  const [receiptObservations,setReceiptObservations]=useState<ReceiptObservation[]>([]);
+  useEffect(()=>{
+    let active=true;
+    void Promise.all(workerArtifacts.map(async artifact=>{
+      try{return await verifyReceipt(artifact.receipt,handoff,artifact.proposal);}
+      catch{return null;}
+    })).then(items=>{
+      if(active)setReceiptObservations(items.filter((x):x is ReceiptObservation=>x!==null));
+    });
+    return ()=>{active=false;};
+  },[handoff,workerArtifacts]);
+  const taskStates=useMemo(
+    ()=>reconcileTaskStates(handoff,receiptObservations),
+    [handoff,receiptObservations]
+  );
+  const selectedTaskId=selectedNodeId===null?null:
+    document.nodes.find(n=>n.id===selectedNodeId&&
+      n.domain==="core"&&n.kind==="continuity-task")?.properties?.taskId;
+  const taskId=typeof selectedTaskId==="string"?selectedTaskId:null;
+
+  const handleImportWorkerReceipt=async (receiptJson:string,proposalJson:string|null)=>{
+    const snapshot=latestDocumentRef.current;
+    const receipt=decodeWorkerArtifact(receiptJson) as unknown as WorkerReceipt;
+    const proposal=proposalJson===null?null:decodeWorkerArtifact(proposalJson);
+    await verifyReceipt(receipt,handoff,proposal);
+    if(latestDocumentRef.current!==snapshot)
+      throw Error("Formula changed during receipt verification; retry.");
+    if(workerArtifacts.some(a=>a.receipt.receipt_sha256===receipt.receipt_sha256))
+      throw Error("Receipt already imported; reuse is not a new observation.");
+    if(workerArtifacts.length>=16)throw Error("Local evidence cache bound reached (16 receipts).");
+    const next=[...workerArtifacts,{receipt,proposal}];
+    try{localStorage.setItem("bi-ble.continuity.worker-evidence.v1",JSON.stringify(next));}
+    catch{throw Error("Unable to preserve local receipt evidence; import canceled.");}
+    setWorkerArtifacts(next);
+  };
+
   const hasContinuityTasks = document.nodes.some(
     node => node.domain === "core" && node.kind === "continuity-task"
   );
@@ -897,6 +948,7 @@ function App() {
           <div className="canvas-stage">
             <FormulaCanvas
               document={document}
+              taskStates={taskStates}
               selectedNodeId={selectedNodeId}
               tool={tool}
               pendingSource={pendingSource}
@@ -1030,6 +1082,11 @@ function App() {
             handoff={handoff}
             error={handoffError}
             onGenerate={handlePrepareHandoff}
+            onImportReceipt={handleImportWorkerReceipt}
+            selectedTaskId={taskId}
+            taskStates={taskStates}
+            observations={receiptObservations}
+            storedCount={workerArtifacts.length}
           />
         </aside>
 
