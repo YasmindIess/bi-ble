@@ -13,6 +13,9 @@ import urllib.request
 
 HOME = Path.home()
 CINEMA = Path(os.environ.get("CINEMA_DIR", HOME / "continuity-cinema-v5-conversation-theater/continuity-cinema")).expanduser()
+MANAGED_CINEMA = Path(os.environ.get("CINEMA_GIT_DIR", HOME / ".local/share/blochfield-cinema/source")).expanduser()
+CINEMA_REPO = "YasmindIess/continuity-cinema"
+CINEMA_BRANCH = "main"
 BIBLE = Path(os.environ.get("BIBLE_REPO_DIR", HOME / "bi-ble-cinema")).expanduser()
 ROBIN = Path(os.environ.get("ROBIN_REPO_DIR", HOME / "nice-robin-cinema")).expanduser()
 REPOS = [
@@ -96,7 +99,7 @@ def busy_capture():
     except Exception:
         return False
 
-def start(name, command, directory, port):
+def start(name, command, directory, port, extra_env=None):
     child = CHILDREN.get(name)
     if child and child.poll() is None:
         return "owned"
@@ -107,7 +110,7 @@ def start(name, command, directory, port):
         return "missing checkout"
     try:
         CHILDREN[name] = subprocess.Popen(command, cwd=str(directory), start_new_session=True,
-            env={**os.environ, "CINEMA_BACKGROUND_SYNC": "0"})
+            env={**os.environ, "CINEMA_BACKGROUND_SYNC": "0", **(extra_env or {})})
         return "started"
     except OSError as exc:
         return f"could not start: {exc}"
@@ -145,15 +148,34 @@ def main():
     log("External processes are never killed. Stop the old Cinema once to transfer ownership.")
     pending = {"cinema": False, "vite": False}
     self_update_pending = False
+    cinema_managed = False
     try:
         while not STOP:
             repos = [synchronize(*p) for p in REPOS]
             control = synchronize("conductor", "YasmindIess/bi-ble", CONTROL, CONTROL_BRANCH)
-            for r in [*repos, control]:
+            managed = {"name": "cinema", "branch": CINEMA_BRANCH, "state": "not_adopted"}
+            managed_ready = False
+            if (MANAGED_CINEMA / ".git").is_dir():
+                managed = synchronize("cinema", CINEMA_REPO, MANAGED_CINEMA, CINEMA_BRANCH)
+                if managed["state"] in ("current", "updated"):
+                    try:
+                        # Even an unchanged adopted checkout must pass CI before cutover.
+                        managed["ci_workflows"] = exact_ci(CINEMA_REPO, managed["head"], MANAGED_CINEMA)
+                        if not (MANAGED_CINEMA / "node_modules/playwright").is_dir() or managed["state"] == "updated":
+                            run(["npm", "ci", "--no-audit", "--no-fund"], MANAGED_CINEMA, timeout=180)
+                        managed_ready = True
+                    except Exception as exc:
+                        managed.update({"state": "held", "reason": "Cinema CI/runtime prerequisite: " + str(exc)[:150]})
+            for r in [*repos, control, managed]:
                 log(f"{r['name']}: {r['state']}" + (f" ({r['reason']})" if r.get("reason") else ""))
             pending["cinema"] |= any(r["state"] == "updated" for r in repos)
+            pending["cinema"] |= managed["state"] == "updated" or (managed_ready != cinema_managed)
+            cinema_dir = MANAGED_CINEMA if managed_ready else CINEMA
+            cinema_env = {"CINEMA_CAPTURES_DIR": str(CINEMA / "captures")} if managed_ready else {}
             pending["vite"] |= repos[0]["state"] == "updated"
-            cinema = start("cinema", ["bash", "./run-local.sh"], CINEMA, 8765)
+            cinema = start("cinema", ["bash", "./run-local.sh"], cinema_dir, 8765, cinema_env)
+            if cinema == "started":
+                cinema_managed = managed_ready
             vite = start("vite", ["pnpm", "editor:web"], BIBLE, 5173) if shutil.which("pnpm") else "pnpm unavailable"
             for name in ("cinema", "vite"):
                 if not pending[name]:
@@ -168,13 +190,17 @@ def main():
                 if stop_owned(name):
                     pending[name] = False
                     if name == "cinema":
-                        cinema = start("cinema", ["bash", "./run-local.sh"], CINEMA, 8765)
+                        cinema = start("cinema", ["bash", "./run-local.sh"], cinema_dir, 8765, cinema_env)
+                        if cinema == "started":
+                            cinema_managed = managed_ready
                     else:
                         vite = start("vite", ["pnpm", "editor:web"], BIBLE, 5173)
                     log(f"{name}: restarted after verified source update")
             write_status({"schema": "blochfield-live-conductor-v1", "checked_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "runtime_marker": "github-self-update-smoke-v1", "supervisor_pid": os.getpid(),
-                "repos": [*repos, control], "cinema": cinema, "vite": vite, "unmerged": True,
+                "repos": [*repos, control, managed], "cinema": cinema, "vite": vite,
+                "cinema_source": "github" if cinema_managed else "legacy",
+                "cinema_managed_branch": CINEMA_BRANCH if cinema_managed else None, "unmerged": True,
                 "release_authorized": False, "production_deployed": False})
             self_update_pending |= control['state'] == 'updated'
             if self_update_pending:
