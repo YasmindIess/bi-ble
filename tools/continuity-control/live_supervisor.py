@@ -210,6 +210,26 @@ def start_ci_runner():
         return "held: "+str(exc)[:100]
 
 
+def runner_remote_status():
+    """Report actual GitHub connection, independent of local Popen ownership."""
+    try:
+        data=json.loads((CI_RUNNER / ".runner").read_text(encoding="utf-8"))
+        name=data.get("agentName")
+        if not name:
+            return {"state":"unregistered","busy":None}
+        info=json.loads(run(["gh","api",
+            "repos/YasmindIess/continuity-cinema/actions/runners?per_page=100"],
+            CONTROL,timeout=12))
+        record=next((item for item in info.get("runners",[])
+                     if item.get("name")==name),None)
+        if record is None:
+            return {"state":"not_listed","busy":None}
+        return {"state":record.get("status","unknown"),
+                "busy":record.get("busy") if isinstance(record.get("busy"),bool) else None}
+    except (OSError,ValueError,RuntimeError,subprocess.TimeoutExpired):
+        return {"state":"unverified","busy":None}
+
+
 def cinema_runner_busy():
     """Conservatively defer supervisor self-reexec while its own CI runner is busy."""
     child=CHILDREN.get("cinema-runner")
@@ -313,6 +333,7 @@ def main():
                     except Exception as exc:
                         managed.update({"state": "held", "reason": "Cinema CI/runtime prerequisite: " + str(exc)[:150]})
             ci_runner=start_ci_runner()
+            runner_connection=runner_remote_status()
             for r in [*repos, control, managed]:
                 message=f"{r['state']}" + (f" ({r['reason']})" if r.get("reason") else "")
                 if prior_messages.get(r['name']) != message:
@@ -351,6 +372,7 @@ def main():
                 "service_pids": {n: (p.pid if p.poll() is None else None)
                                  for n, p in CHILDREN.items()},
                 "cinema_ci_runner": ci_runner,
+                "cinema_runner_connection": runner_connection,
                 "cinema_runner_launch_files_ready": all(
                     (CI_RUNNER / name).is_file()
                     for name in ("run.sh", "run-helper.sh.template", "safe_sleep.sh")),
