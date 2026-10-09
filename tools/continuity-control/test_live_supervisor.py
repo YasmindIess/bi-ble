@@ -63,6 +63,24 @@ class SupervisorSafetyTests(TestCase):
             with patch.object(mod, "HOME", home), patch.object(mod, "CI_RUNNER", dest):
                 self.assertIn("symlink", mod.repair_runner_launch_files())
 
+    def test_github_online_state_not_inferred_from_process_launch(self):
+        with TemporaryDirectory() as temp:
+            root=Path(temp)
+            (root / ".runner").write_text('{"agentName":"continuity-cinema-YasAnacreto"}')
+            remote='{"runners":[{"name":"continuity-cinema-YasAnacreto","status":"offline","busy":false}]}'
+            with patch.object(mod, "CI_RUNNER", root), patch.object(mod, "run", return_value=remote):
+                self.assertEqual(mod.runner_remote_status(), {"state":"offline","busy":False})
+            connected='{"runners":[{"name":"continuity-cinema-YasAnacreto","status":"online","busy":true}]}'
+            with patch.object(mod, "CI_RUNNER", root), patch.object(mod, "run", return_value=connected):
+                self.assertEqual(mod.runner_remote_status(), {"state":"online","busy":True})
+
+    def test_runner_status_unavailable_is_not_claimed_online(self):
+        with TemporaryDirectory() as temp:
+            root=Path(temp)
+            (root / ".runner").write_text('{"agentName":"cinema"}')
+            with patch.object(mod, "CI_RUNNER", root), patch.object(mod, "run", side_effect=RuntimeError("offline API")):
+                self.assertEqual(mod.runner_remote_status()["state"], "unverified")
+
     def test_missing_exact_head_ci_fails_closed(self):
         with patch.object(mod.shutil, "which", return_value="/usr/bin/gh"), \
              patch.object(mod, "run", return_value='{"workflow_runs": []}'):
