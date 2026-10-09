@@ -63,7 +63,7 @@ def event_rows():
         try:
             event = json.loads(line)
             records.append(
-                f"{event.get('at','')[-8:]} {event.get('subject','')} "
+                f"{str(event.get('at',''))[11:19]} {event.get('subject','')} "
                 f"{event.get('state','')} {event.get('detail','')}"
             )
         except (ValueError, TypeError):
@@ -117,7 +117,11 @@ def report(mode, state, remote, previous, now):
         ("normal", f"  Branch: {local.get('branch','not adopted' if mode == 'cinema' else '?')}"),
         ("normal", f"  Commit: {local.get('head','—')}"),
         ("good" if local.get("state") in ("current", "updated") else "muted",
-         f"  Git sync: {local.get('state','not adopted')}  |  CI workflows on incoming update: {local.get('ci_workflows','not checked this poll')}"),
+         f"  Git sync: {local.get('state','not adopted')}"),
+        ("normal", f"  Incoming CI: {local.get('ci_workflows', 'not evaluated in this poll')}"),
+        ("bad" if local.get("state") == "held" else "normal",
+         f"  Hold reason: {local.get('reason', 'unknown; inspect status.json')}" if local.get("state") == "held"
+         else f"  Hold reason: none"),
         ("normal", f"  Conductor: {str(conductor.get('head','?'))[:16]}  ({conductor.get('state','?')})"),
         ("divider", ""),
     ]
