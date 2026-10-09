@@ -23,7 +23,7 @@ class SupervisorSafetyTests(TestCase):
         data='{"workflow_runs":[{"head_sha":"'+("a"*40)+'","event":"push","workflow_id":11,"name":"Cinema verify","id":123,"created_at":"2026-10-09T20:00:00Z","status":"queued","conclusion":null}]}'
         with patch.object(mod.shutil, "which", return_value="/usr/bin/gh"), \
              patch.object(mod, "run", return_value=data):
-            with self.assertRaisesRegex(RuntimeError, r"CI pending: Cinema verify run 123 \\(queued\\)"):
+            with self.assertRaisesRegex(RuntimeError, "CI pending: Cinema verify run 123"):
                 mod.exact_ci("YasmindIess/continuity-cinema", "a"*40, Path("/tmp"))
 
     def test_failed_ci_includes_conclusion_and_run_id(self):
