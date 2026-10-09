@@ -173,6 +173,7 @@ def main():
                         vite = start("vite", ["pnpm", "editor:web"], BIBLE, 5173)
                     log(f"{name}: restarted after verified source update")
             write_status({"schema": "blochfield-live-conductor-v1", "checked_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                "runtime_marker": "github-self-update-smoke-v1", "supervisor_pid": os.getpid(),
                 "repos": [*repos, control], "cinema": cinema, "vite": vite, "unmerged": True,
                 "release_authorized": False, "production_deployed": False})
             self_update_pending |= control['state'] == 'updated'
