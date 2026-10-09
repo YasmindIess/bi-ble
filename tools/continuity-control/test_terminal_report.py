@@ -50,6 +50,17 @@ class TerminalReportTests(TestCase):
         self.assertIn("automatic=False", text)
         self.assertIn("NOT verified", text)
 
+    def test_held_cinema_exposes_ci_error_without_hiding_it(self):
+        state = {"cinema": "owned", "repos": [
+            {"name": "cinema", "state": "held", "branch": "main",
+             "head": "32f1227", "reason": "Cinema CI/runtime prerequisite: no exact-head CI"}
+        ]}
+        with patch.object(mod, "event_rows", return_value=[]), patch.object(mod, "tail", return_value=[]):
+            text = "\n".join(v for _, v in mod.report("cinema", state,
+                            {"http": True, "loop": {}, "captures": {}, "edge": {}}, None, 0))
+        self.assertIn("Hold reason:", text)
+        self.assertIn("no exact-head CI", text)
+
     def test_event_log_contains_structured_only(self):
         with TemporaryDirectory() as temp:
             path = Path(temp) / "events.jsonl"
