@@ -163,6 +163,16 @@ def main():
             raise RuntimeError("Cannot externalize captures: expected server anchor missing")
         text = text.replace(anchor, "const captures=path.resolve(process.env.CINEMA_CAPTURES_DIR||path.join(root,'captures'));", 1)
         server.write_text(text)
+        runner = DEST / "cycle-browser.mjs"
+        runner_source = runner.read_text()
+        runner_anchor = "const captureRoot=path.join(root,'captures');"
+        if runner_anchor not in runner_source:
+            raise RuntimeError("Cannot externalize Chromium capture path; held")
+        runner.write_text(runner_source.replace(
+            runner_anchor,
+            "const captureRoot=path.resolve(process.env.CINEMA_CAPTURES_DIR||path.join(root,'captures'));",
+            1
+        ))
         ignore = DEST / ".gitignore"
         ignore.write_text("node_modules/\ncaptures/\n*.log\n.env\n.env.*\n.edge*\n")
         workflow = DEST / ".github/workflows/ci.yml"
