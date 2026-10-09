@@ -80,3 +80,37 @@ The supervisor observes the new Git checkout at `~/.local/share/blochfield-cinem
 `gh`, `git`, `npm`, and a correctly authenticated GitHub account with permission to create a private repository are prerequisites. If the target repository already exists, this script refuses to replace it. The original userscript has **not** been silently upgraded by this migration; Git-hosted Cinema scripts still need their own loader/distribution mechanism.
 
 No PR merge, production deployment, NGU contract write, or authority promotion is performed.
+
+## Two existing terminal windows as live, read-only reports
+
+After the conductor pulls this CI-green update automatically, use the two previously idle terminals without stopping the supervisor:
+
+bi-ble terminal:
+
+```bash
+python3 ~/.local/share/blochfield-conductor/source/tools/continuity-control/terminal_report.py vite
+```
+
+Cinema terminal:
+
+```bash
+python3 ~/.local/share/blochfield-conductor/source/tools/continuity-control/terminal_report.py cinema
+```
+
+Reports use Python's built-in curses and require no npm install or additional agents. They read the existing conductor JSON, append-only operational transition log, and per-service local output logs. HTTP checks are local and limited to 127.0.0.1. Polling runs at low frequency and redraws only on changed data; no Git fetches, Actions queries, or remote evidence reads are triggered by the reports.
+
+Displayed facts include health and conductor ownership, exact source branch/commit, last synchronized state and CI gate details, conductor heartbeat, recent status transitions, service-output excerpts, and for Cinema the local capture/loop results plus private-upload configuration. The Cinema report deliberately does not claim to rehash private remote PNG bytes or independently witness execution.
+
+Press q to close either report; this does not stop the Vite/Cinema processes. Their output is captured in private `~/.local/state/blochfield-conductor/vite.log` and `cinema.log` files, permission mode 0600. A state-change event log lives in `events.jsonl`. The conductor continues to own the services.
+
+### Corrected first-time Cinema adoption
+
+`adopt_cinema.py --approve-private-upload` now accepts an **authenticated owner-visible HTTP 404** as the expected indication that the private repository does not yet exist; the prior GraphQL `Could not resolve` error was incorrectly treated as an admission failure. Existing repository, wrong logged-in owner, 403, or unexpected GitHub errors remain blocked.
+
+Private source creation is intentionally separate from read-only dashboards. Its one-time explicit command remains:
+
+```bash
+python3 ~/.local/share/blochfield-conductor/source/tools/continuity-control/adopt_cinema.py --approve-private-upload
+```
+
+The above approval will create and push allowlisted program files to a new private GitHub repo. It never includes private captures or Cloudflare secrets. No production deployment or authority promotion.
