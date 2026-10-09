@@ -38,8 +38,8 @@ APPROVED_FIXTURE_SHA256 = "b1bd089c1ac2c4d446da8890acbf7df2ab1cc6d9cba5a64705cbd
 def synthetic_png():
     def chunk(name, payload):
         return struct.pack("!I", len(payload)) + name + payload + struct.pack("!I", zlib.crc32(name + payload))
-    return (b"\\x89PNG\\r\\n\\x1a\\n" + chunk(b"IHDR", struct.pack("!IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress(b"\\x00\\x00\\x00\\x00\\x00")) + chunk(b"IEND", b""))
+    return (b"\x89PNG\\r\\n\x1a\\n" + chunk(b"IHDR", struct.pack("!IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00\x00")) + chunk(b"IEND", b""))
 
 
 WORKFLOW = """name: Continuity Cinema integrity and source tests
