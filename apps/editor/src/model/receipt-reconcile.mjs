@@ -84,7 +84,7 @@ async function verifyReport(r){
   demand(Array.isArray(r.checks)&&r.checks.length>0&&r.checks.length<=2020,'checks outside bound');
   for(const c of r.checks){
     exact(c,['id','status','reason'],'check');
-    demand(typeof c.id==='string'&&/^[a-z0-9_.:/-]{1,180}$/.test(c.id)&&
+    demand(typeof c.id==='string'&&/^[A-Za-z0-9_.:/-]{1,180}$/.test(c.id)&&
       ['pass','blocked'].includes(c.status)&&typeof c.reason==='string'&&c.reason.length<=2048,'check invalid');
   }
   strings(r.blocked_check_ids,'blocked checks',2020);
