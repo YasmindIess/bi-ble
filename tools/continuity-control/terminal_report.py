@@ -7,9 +7,9 @@ Press q to exit the report. The conductor owns the actual service processes.
 No Git, GitHub, Cloudflare, or service mutation is performed.
 """
 import argparse
-from collections import deque
 import curses
 import json
+from datetime import datetime
 from pathlib import Path
 import re
 import time
@@ -75,8 +75,8 @@ def elapsed_label(checked):
     if not checked:
         return "never"
     try:
-        stamp = time.strptime(checked, "%Y-%m-%dT%H:%M:%S%z")
-        age = max(0, round(time.time() - time.mktime(stamp)))
+        stamp = datetime.strptime(checked, "%Y-%m-%dT%H:%M:%S%z")
+        age = max(0, round(time.time() - stamp.timestamp()))
         return f"{age}s ago"
     except (ValueError, TypeError, OverflowError):
         return clean(checked)[-24:]
@@ -203,7 +203,7 @@ def watch(stdscr, mode):
             break
         if now - latest_remote > 2 or key == ord("r"):
             port = "5173/" if mode == "vite" else "8765/"
-            cache["http"] = get_local(port) is not None if mode == "cinema" else ping(port)
+            cache["http"] = ping(port)
             if mode == "cinema":
                 cache["loop"] = get_local("8765/api/loop/status") or {}
                 cache["captures"] = get_local("8765/api/captures") or {}
