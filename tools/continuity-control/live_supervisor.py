@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import signal
 import socket
+import sys
 import subprocess
 import time
 import urllib.request
@@ -18,6 +19,8 @@ REPOS = [
     ("bi-ble", "YasmindIess/bi-ble", BIBLE, os.environ.get("BIBLE_EXPECTED_BRANCH", "feat/continuity-handoff-v1")),
     ("nice-robin", "YasmindIess/nice-robin", ROBIN, os.environ.get("ROBIN_EXPECTED_BRANCH", "feat/continuity-bounded-local-worker-v1")),
 ]
+CONTROL = Path(__file__).resolve().parents[2]
+CONTROL_BRANCH = "feat/continuity-conductor-v1"
 POLL = max(20, int(os.environ.get("BLOCHFIELD_POLL_SECONDS", "45")))
 STATE = HOME / ".local/state/blochfield-conductor/status.json"
 CHILDREN = {}
@@ -144,7 +147,8 @@ def main():
     try:
         while not STOP:
             repos = [synchronize(*p) for p in REPOS]
-            for r in repos:
+            control = synchronize("conductor", "YasmindIess/bi-ble", CONTROL, CONTROL_BRANCH)
+            for r in [*repos, control]:
                 log(f"{r['name']}: {r['state']}" + (f" ({r['reason']})" if r.get("reason") else ""))
             pending["cinema"] |= any(r["state"] == "updated" for r in repos)
             pending["vite"] |= repos[0]["state"] == "updated"
@@ -168,8 +172,15 @@ def main():
                         vite = start("vite", ["pnpm", "editor:web"], BIBLE, 5173)
                     log(f"{name}: restarted after verified source update")
             write_status({"schema": "blochfield-live-conductor-v1", "checked_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-                "repos": repos, "cinema": cinema, "vite": vite, "unmerged": True,
+                "repos": [*repos, control], "cinema": cinema, "vite": vite, "unmerged": True,
                 "release_authorized": False, "production_deployed": False})
+            if control['state'] == 'updated':
+                if busy_capture():
+                    log('Supervisor source updated: postpone self-restart until capture ends')
+                else:
+                    log('Supervisor source updated and CI-verified: restart supervised processes and re-exec')
+                    if stop_owned('cinema') and stop_owned('vite'):
+                        os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve())])
             for _ in range(POLL):
                 if STOP:
                     break
