@@ -15,6 +15,7 @@ HOME = Path.home()
 CINEMA = Path(os.environ.get("CINEMA_DIR", HOME / "continuity-cinema-v5-conversation-theater/continuity-cinema")).expanduser()
 MANAGED_CINEMA = Path(os.environ.get("CINEMA_GIT_DIR", HOME / ".local/share/blochfield-cinema/source")).expanduser()
 CINEMA_REPO = "YasmindIess/continuity-cinema"
+CI_RUNNER = HOME / ".local/share/blochfield-cinema-runner"
 CINEMA_BRANCH = "main"
 BIBLE = Path(os.environ.get("BIBLE_REPO_DIR", HOME / "bi-ble-cinema")).expanduser()
 ROBIN = Path(os.environ.get("ROBIN_REPO_DIR", HOME / "nice-robin-cinema")).expanduser()
@@ -124,6 +125,27 @@ def start(name, command, directory, port, extra_env=None):
     except OSError as exc:
         return f"could not start: {exc}"
 
+def start_ci_runner():
+    """Own a separately registered private-repo runner; never reuse NICE-ROBIN runner."""
+    child=CHILDREN.get("cinema-runner")
+    if child and child.poll() is None:
+        return "owned"
+    CHILDREN.pop("cinema-runner",None)
+    if not (CI_RUNNER / ".runner").is_file() or not (CI_RUNNER / "run.sh").is_file():
+        return "not_registered"
+    STATE.parent.mkdir(parents=True,exist_ok=True)
+    fd=os.open(str(STATE.parent / "cinema-runner.log"),
+               os.O_WRONLY|os.O_APPEND|os.O_CREAT,0o600)
+    try:
+        with os.fdopen(fd,"ab",buffering=0) as logstream:
+            CHILDREN["cinema-runner"]=subprocess.Popen(
+                ["bash","./run.sh"],cwd=str(CI_RUNNER),start_new_session=True,
+                stdout=logstream,stderr=subprocess.STDOUT,env=os.environ.copy())
+        return "started"
+    except OSError as exc:
+        return "held: "+str(exc)[:100]
+
+
 def stop_owned(name):
     child = CHILDREN.get(name)
     if child is None:
@@ -183,6 +205,7 @@ def main():
     pending = {"cinema": False, "vite": False}
     self_update_pending = False
     cinema_managed = False
+    prior_messages = {}
     try:
         while not STOP:
             repos = [synchronize(*p) for p in REPOS]
@@ -207,8 +230,12 @@ def main():
                         managed_ready = True
                     except Exception as exc:
                         managed.update({"state": "held", "reason": "Cinema CI/runtime prerequisite: " + str(exc)[:150]})
+            ci_runner=start_ci_runner()
             for r in [*repos, control, managed]:
-                log(f"{r['name']}: {r['state']}" + (f" ({r['reason']})" if r.get("reason") else ""))
+                message=f"{r['state']}" + (f" ({r['reason']})" if r.get("reason") else "")
+                if prior_messages.get(r['name']) != message:
+                    log(r["name"] + ": " + message)
+                    prior_messages[r["name"]]=message
             pending["cinema"] |= any(r["state"] == "updated" for r in repos)
             pending["cinema"] |= managed["state"] == "updated" or (managed_ready != cinema_managed)
             cinema_dir = MANAGED_CINEMA if managed_ready else CINEMA
@@ -241,6 +268,7 @@ def main():
                 "runtime_marker": "github-self-update-smoke-v1", "supervisor_pid": os.getpid(),
                 "service_pids": {n: (p.pid if p.poll() is None else None)
                                  for n, p in CHILDREN.items()},
+                "cinema_ci_runner": ci_runner,
                 "repos": [*repos, control, managed], "cinema": cinema, "vite": vite,
                 "cinema_source": "github" if cinema_managed else "legacy",
                 "cinema_managed_branch": CINEMA_BRANCH if cinema_managed else None, "unmerged": True,
@@ -251,14 +279,14 @@ def main():
                     log('Supervisor source updated: postpone self-restart until capture ends')
                 else:
                     log('Supervisor source updated and CI-verified: restart supervised processes and re-exec')
-                    if stop_owned('cinema') and stop_owned('vite'):
+                    if stop_owned('cinema') and stop_owned('vite') and stop_owned('cinema-runner'):
                         os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve())])
             for _ in range(POLL):
                 if STOP:
                     break
                 time.sleep(1)
     finally:
-        for name in ("cinema", "vite"):
+        for name in ("cinema", "vite", "cinema-runner"):
             stop_owned(name)
         log("Third runtime stopped; evidence and external services untouched")
 
