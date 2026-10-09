@@ -108,6 +108,22 @@ def select_sources():
     return files
 
 
+def verify_private_target_unclaimed():
+    """Only the owning GitHub account can create this specific new private repo."""
+    command(["gh", "auth", "status"])
+    account = command(["gh", "api", "user", "--jq", ".login"]).strip()
+    owner = REPO.split("/", 1)[0]
+    if account.lower() != owner.lower():
+        raise RuntimeError("GitHub account is not the target repository owner; refusing upload")
+    probe = subprocess.run(["gh", "api", f"repos/{REPO}"],
+                           capture_output=True, text=True, timeout=25)
+    if probe.returncode == 0:
+        raise RuntimeError("Target GitHub repository already exists; refusing to modify it")
+    error = probe.stderr or probe.stdout
+    if "HTTP 404" not in error and "Not Found" not in error:
+        raise RuntimeError("Repository visibility check failed (not a 404); refusing creation")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--approve-private-upload", action="store_true",
@@ -126,21 +142,7 @@ def main():
     for cmd in ("git", "gh", "npm"):
         if not shutil.which(cmd):
             raise RuntimeError(f"Required local command missing: {cmd}")
-    command(["gh", "auth", "status"])
-    account = command(["gh", "api", "user", "--jq", ".login"]).strip()
-    owner = REPO.split("/", 1)[0]
-    if account.lower() != owner.lower():
-        raise RuntimeError("GitHub account is not the target repository owner; refusing upload")
-    # A missing repository is precisely what a first-time adoption needs.
-    # REST 404 after authenticating as its owner means it is not visible;
-    # gh repo create will still refuse a collision/race.
-    probe = subprocess.run(["gh", "api", f"repos/{REPO}"],
-                           capture_output=True, text=True, timeout=25)
-    if probe.returncode == 0:
-        raise RuntimeError("Target GitHub repository already exists; refusing to modify it")
-    error = probe.stderr or probe.stdout
-    if "HTTP 404" not in error and "Not Found" not in error:
-        raise RuntimeError("Repository visibility check failed (not a 404); refusing creation")
+    verify_private_target_unclaimed()
     DEST.parent.mkdir(parents=True, exist_ok=True)
     DEST.mkdir(mode=0o700)
     try:
