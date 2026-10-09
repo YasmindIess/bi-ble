@@ -89,7 +89,7 @@ class SupervisorSafetyTests(TestCase):
 
     def test_both_capture_views_idle_allow_restart(self):
         with patch.object(mod, "listening", return_value=True), \
-             patch.object(mod.urllib.request, "urlopen", return_value=io.BytesIO(b'{"status":"idle"}')):
+             patch.object(mod.urllib.request, "urlopen", side_effect=lambda *args, **kwargs: io.BytesIO(b'{"status":"idle"}')):
             self.assertFalse(mod.busy_capture())
 
     def test_absent_server_is_not_treated_as_active_capture(self):
