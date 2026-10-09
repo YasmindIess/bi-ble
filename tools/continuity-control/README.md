@@ -27,3 +27,33 @@ GitHub code written here cannot directly manipulate an independently running WSL
 The v0.6 controller remains distributed as a self-contained local package for now, not yet a tracked component of this repository. Integrating the Cinema source itself and moving its `captures/` archive outside the Git working tree are future steps, needed before GitHub pulls can safely update Cinema's own server and userscript code.
 
 No real-world contract writes, deployment, merges, canonical realization, or independent witness are authorized by this gate.
+
+## Third living terminal: GitHub pull → local reload
+
+**One-time bootstrap in a third WSL terminal (no ZIP):**
+
+```bash
+mkdir -p "$HOME/.local/share/blochfield-conductor"
+git clone --single-branch --branch feat/continuity-conductor-v1 \
+  https://github.com/YasmindIess/bi-ble.git \
+  "$HOME/.local/share/blochfield-conductor/source"
+python3 "$HOME/.local/share/blochfield-conductor/source/tools/continuity-control/live_supervisor.py"
+```
+
+If that control checkout already exists, omit the clone and run only the Python command. The supervisor tracks its own branch, and after a CI-green update it re-executes the new supervisor code.
+
+Pinned app branches: bi-ble at `~/bi-ble-cinema` on `feat/continuity-handoff-v1`; NICE-ROBIN at `~/nice-robin-cinema` on `feat/continuity-bounded-local-worker-v1`. Cinema stays at `~/continuity-cinema-v5-conversation-theater/continuity-cinema`.
+
+**One-time service handoff:** Keep existing Vite running. Stop the old standalone Cinema using Ctrl+C in its terminal. The third terminal detects port 8765 becoming free, then starts Cinema itself via `run-local.sh` and Node watch mode. It never kills an externally started process.
+
+Every 45 seconds it fetches pinned branches; requires a clean working tree, exact-head CI success for new commits, and fast-forward ancestry. Dirty, divergent, wrong-branch, wrong-origin, or unverified source is held. On updates, it restarts only services it owns. Externally started Vite receives code edits via HMR; NICE-ROBIN is a per-cycle bounded Python worker, not a persistent HTTP service.
+
+**Inspect status:**
+
+```bash
+cat "$HOME/.local/state/blochfield-conductor/status.json"
+```
+
+Stop the third terminal with Ctrl+C to stop services it owns. It does not alter captures, credentials, GitHub PR merge state, Cloudflare publication, or production deployment.
+
+**Remaining limitation:** Cinema source itself is not yet tracked as a standalone Git checkout. This supervisor restarts Cinema on upstream bi-ble/NICE-ROBIN updates and Node watch reloads local Cinema edits, but it cannot fetch new Cinema application code until that source is hosted in an approved Git checkout. This is a local development supervisor, not production CD.
