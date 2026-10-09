@@ -237,6 +237,20 @@ const definitions: Record<
     }
   ],
 
+  "core:continuity-task": [
+    { key: "taskId", label: "Task ID", editor: "text", defaultValue: "",
+      placeholder: "e.g. review-ci-baseline" },
+    { key: "priority", label: "Priority (0-100)", editor: "number", defaultValue: 50 },
+    { key: "costUnits", label: "Cost units (1-100)", editor: "number", defaultValue: 1 },
+    { key: "mode", label: "Mode", editor: "select", defaultValue: "read_only",
+      options: [
+        { value: "read_only", label: "Read-only" },
+        { value: "proposal", label: "Proposal only" }
+      ] },
+    { key: "evidence", label: "Evidence kinds (comma separated)", editor: "text", defaultValue: "ci",
+      placeholder: "ci,package,review" }
+  ],
+
   "gravity:network": [
     {
       key: "networkName",

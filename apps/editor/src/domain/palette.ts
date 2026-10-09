@@ -47,6 +47,12 @@ export const paletteGroups: PaletteGroup[] = [
         label: "Obstruction",
         kind: "obstruction",
         domain: "core"
+      },
+      {
+        id: "core-continuity-task",
+        label: "Continuity task",
+        kind: "continuity-task",
+        domain: "core"
       }
     ]
   },
