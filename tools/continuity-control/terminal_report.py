@@ -9,6 +9,7 @@ No Git, GitHub, Cloudflare, or service mutation is performed.
 import argparse
 import curses
 import os
+import sys
 import json
 from datetime import datetime
 from pathlib import Path
@@ -227,7 +228,7 @@ def paint(stdscr, rows):
     curses.doupdate()
 
 
-def watch(stdscr, mode):
+def watch(stdscr, mode, source_mtime):
     try:
         curses.curs_set(0)
     except curses.error:
@@ -245,6 +246,11 @@ def watch(stdscr, mode):
     last_paint = None
     previous_usage = None
     while True:
+        try:
+            if Path(__file__).stat().st_mtime_ns != source_mtime:
+                return 'reload'
+        except OSError:
+            pass
         now = time.time()
         key = stdscr.getch()
         if key in (ord("q"), 27):
@@ -284,7 +290,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=("vite", "cinema"))
     args = parser.parse_args()
-    curses.wrapper(lambda scr: watch(scr, args.mode))
+    try:
+        mtime=Path(__file__).stat().st_mtime_ns
+    except OSError:
+        mtime=0
+    action=curses.wrapper(lambda scr: watch(scr, args.mode, mtime))
+    if action=='reload':
+        # Curses has already restored the terminal before the code is replaced.
+        os.execv(sys.executable,[sys.executable,str(Path(__file__).resolve()),args.mode])
 
 
 if __name__ == "__main__":
