@@ -61,6 +61,21 @@ class TerminalReportTests(TestCase):
         self.assertIn("Hold reason:", text)
         self.assertIn("no exact-head CI", text)
 
+    def test_process_group_measurements_are_real_and_scoped(self):
+        import os
+        import time
+        empty, sample = mod.group_metrics(None, None, time.monotonic())
+        self.assertEqual(empty["members"], 0)
+        self.assertIsNone(sample)
+        now = time.monotonic()
+        metrics, clock = mod.group_metrics(os.getpgrp(), None, now)
+        if Path("/proc").is_dir():
+            self.assertGreaterEqual(metrics["members"], 1)
+            self.assertIsInstance(metrics["rss_mb"], float)
+            self.assertIsNone(metrics["cpu_pct"])
+            again, _ = mod.group_metrics(os.getpgrp(), clock, time.monotonic()+0.001)
+            self.assertGreaterEqual(again["cpu_pct"], 0)
+
     def test_event_log_contains_structured_only(self):
         with TemporaryDirectory() as temp:
             path = Path(temp) / "events.jsonl"
