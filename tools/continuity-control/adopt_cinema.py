@@ -6,6 +6,7 @@ Only an allowlist of program files is ever staged for GitHub.
 """
 import argparse
 import hashlib
+import json
 import struct
 import zlib
 import os
@@ -150,6 +151,11 @@ def main():
         else:
             # Never upload an unrecognized local screenshot to GitHub.
             fixture_target.write_bytes(synthetic_png())
+        pkg_file = DEST / "package.json"
+        pkg = json.loads(pkg_file.read_text())
+        # Repair the v0.6 Playwright installation gap during adoption.
+        pkg.setdefault("devDependencies", {})["playwright"] = "1.56.1"
+        pkg_file.write_text(json.dumps(pkg, indent=2) + "\n")
         server = DEST / "server.mjs"
         text = server.read_text()
         anchor = "const captures=path.join(root,'captures');"
