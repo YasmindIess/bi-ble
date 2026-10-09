@@ -176,6 +176,8 @@ def report(mode, state, remote, previous, now):
         latest = (captures.get("cycles") or [{}])[0]
         rows.extend([
             ("section", "CAPTURE & EVIDENCE"),
+            ("good" if state.get("cinema_ci_runner")=="owned" else "held",
+             f"  Repository CI runner: {state.get('cinema_ci_runner','not registered')}"),
             ("good" if loop.get("status")=="passed" else "held" if loop.get("status")=="held" else "running" if loop.get("status")=="running" else "normal",
              f"  Loop: {loop.get('status','unavailable')}  |  Phase: {loop.get('phase','—')}"),
             ("normal", f"  Last loop: {(loop.get('last') or {}).get('status','none')}"),
