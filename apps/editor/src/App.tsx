@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState
 } from "react";
 
@@ -16,6 +17,7 @@ import "./workspace.css";
 import "./properties.css";
 import "./evidence.css";
 import "./layout-responsibility.css";
+import "./continuity.css";
 
 import {
   FormulaCanvas,
@@ -33,6 +35,9 @@ import {
 import {
   CompilerPanel
 } from "./components/CompilerPanel";
+
+import { ContinuityPanel } from "./components/ContinuityPanel";
+import { exportContinuityHandoff, type ContinuityHandoff } from "./model/continuity-export.mjs";
 
 import {
   NodePropertyEditor
@@ -136,13 +141,25 @@ function App() {
   const [isCompiling, setIsCompiling] =
     useState(false);
 
+  const latestDocumentRef = useRef(document);
+  latestDocumentRef.current = document;
+
+  const [handoff, setHandoff] = useState<ContinuityHandoff | null>(null);
+  const [handoffError, setHandoffError] = useState<string | null>(null);
+  const [isGeneratingHandoff, setIsGeneratingHandoff] = useState(false);
+  const hasContinuityTasks = document.nodes.some(
+    node => node.domain === "core" && node.kind === "continuity-task"
+  );
+
   useEffect(() => {
     saveEditorSession(session);
   }, [session]);
 
   useEffect(() => {
     setCompilation(null);
-  }, [document.updatedAt]);
+    setHandoff(null);
+    setHandoffError(null);
+  }, [document]);
 
   const selectedNode = useMemo(
     () =>
@@ -630,6 +647,28 @@ function App() {
     }
   };
 
+  const handlePrepareHandoff = async (project: string) => {
+    // Explicit export always recomputes the current state before emitting a
+    // handoff. A changed document cannot reuse an in-flight result.
+    const snapshot = document;
+    setIsGeneratingHandoff(true);
+    setHandoff(null);
+    setHandoffError(null);
+    try {
+      const result = await compileFormula(snapshot);
+      const candidate = await exportContinuityHandoff(result, project);
+      if (latestDocumentRef.current !== snapshot) {
+        throw Error("Formula changed during continuity export; retry on current state.");
+      }
+      setCompilation(result);
+      setHandoff(candidate);
+    } catch (error) {
+      setHandoffError(error instanceof Error ? error.message : "Continuity export blocked");
+    } finally {
+      setIsGeneratingHandoff(false);
+    }
+  };
+
   const selectedConnectionCount =
     selectedNode === null
       ? 0
@@ -984,6 +1023,13 @@ function App() {
             isCompiling={isCompiling}
             nodeCount={document.nodes.length}
             edgeCount={document.edges.length}
+          />
+          <ContinuityPanel
+            hasContinuityTasks={hasContinuityTasks}
+            generating={isGeneratingHandoff}
+            handoff={handoff}
+            error={handoffError}
+            onGenerate={handlePrepareHandoff}
           />
         </aside>
 
