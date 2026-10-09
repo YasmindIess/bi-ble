@@ -39,7 +39,7 @@ APPROVED_FIXTURE_SHA256 = "b1bd089c1ac2c4d446da8890acbf7df2ab1cc6d9cba5a64705cbd
 def synthetic_png():
     def chunk(name, payload):
         return struct.pack("!I", len(payload)) + name + payload + struct.pack("!I", zlib.crc32(name + payload))
-    return (b"\x89PNG\\r\\n\x1a\\n" + chunk(b"IHDR", struct.pack("!IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack("!IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
             + chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00\x00")) + chunk(b"IEND", b""))
 
 
@@ -127,13 +127,20 @@ def main():
         if not shutil.which(cmd):
             raise RuntimeError(f"Required local command missing: {cmd}")
     command(["gh", "auth", "status"])
-    try:
-        command(["gh", "repo", "view", REPO, "--json", "name"])
-    except RuntimeError as exc:
-        if "Could not resolve" in str(exc) or "authentication" in str(exc).lower():
-            raise RuntimeError("Cannot verify target repository; refusing creation") from exc
-    else:
+    account = command(["gh", "api", "user", "--jq", ".login"]).strip()
+    owner = REPO.split("/", 1)[0]
+    if account.lower() != owner.lower():
+        raise RuntimeError("GitHub account is not the target repository owner; refusing upload")
+    # A missing repository is precisely what a first-time adoption needs.
+    # REST 404 after authenticating as its owner means it is not visible;
+    # gh repo create will still refuse a collision/race.
+    probe = subprocess.run(["gh", "api", f"repos/{REPO}"],
+                           capture_output=True, text=True, timeout=25)
+    if probe.returncode == 0:
         raise RuntimeError("Target GitHub repository already exists; refusing to modify it")
+    error = probe.stderr or probe.stdout
+    if "HTTP 404" not in error and "Not Found" not in error:
+        raise RuntimeError("Repository visibility check failed (not a 404); refusing creation")
     DEST.parent.mkdir(parents=True, exist_ok=True)
     DEST.mkdir(mode=0o700)
     try:
