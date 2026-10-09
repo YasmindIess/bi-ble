@@ -19,6 +19,26 @@ class SupervisorSafetyTests(TestCase):
             with self.assertRaisesRegex(RuntimeError, "no exact-head"):
                 mod.exact_ci("YasmindIess/bi-ble", "a" * 40, Path("/tmp"))
 
+    def test_pending_ci_is_not_mistaken_for_failure_or_success(self):
+        data='{"workflow_runs":[{"head_sha":"'+("a"*40)+'","event":"push","workflow_id":11,"name":"Cinema verify","id":123,"created_at":"2026-10-09T20:00:00Z","status":"queued","conclusion":null}]}'
+        with patch.object(mod.shutil, "which", return_value="/usr/bin/gh"), \
+             patch.object(mod, "run", return_value=data):
+            with self.assertRaisesRegex(RuntimeError, r"CI pending: Cinema verify run 123 \\(queued\\)"):
+                mod.exact_ci("YasmindIess/continuity-cinema", "a"*40, Path("/tmp"))
+
+    def test_failed_ci_includes_conclusion_and_run_id(self):
+        data='{"workflow_runs":[{"head_sha":"'+("a"*40)+'","event":"push","workflow_id":11,"name":"Cinema verify","id":124,"created_at":"2026-10-09T20:00:00Z","status":"completed","conclusion":"failure"}]}'
+        with patch.object(mod.shutil, "which", return_value="/usr/bin/gh"), \
+             patch.object(mod, "run", return_value=data):
+            with self.assertRaisesRegex(RuntimeError, "CI not passed: Cinema verify run 124"):
+                mod.exact_ci("YasmindIess/continuity-cinema", "a"*40, Path("/tmp"))
+
+    def test_successful_ci_can_admit_exact_head(self):
+        data='{"workflow_runs":[{"head_sha":"'+("a"*40)+'","event":"push","workflow_id":11,"name":"Cinema verify","id":125,"created_at":"2026-10-09T20:00:00Z","status":"completed","conclusion":"success"}]}'
+        with patch.object(mod.shutil, "which", return_value="/usr/bin/gh"), \
+             patch.object(mod, "run", return_value=data):
+            self.assertEqual(mod.exact_ci("YasmindIess/continuity-cinema", "a"*40, Path("/tmp")),1)
+
     def test_dirty_checkout_cannot_be_pulled(self):
         with TemporaryDirectory() as tmp:
             directory = Path(tmp)
