@@ -21,6 +21,12 @@ for candidate in "$HOME/actions-runner-blochfield" "$HOME/actions-runner-ngu"; d
   fi
 done
 [[ -n "$source_runner" ]] || { echo 'Existing trusted GitHub runner installation not found; held.' >&2; exit 1; }
+for support in run-helper.sh.template safe_sleep.sh; do
+  [[ -f "$source_runner/$support" && ! -L "$source_runner/$support" ]] || {
+    echo "Trusted runner distribution missing $support; held." >&2
+    exit 1
+  }
+done
 [[ ! -e "$dest" ]] || { echo 'Cinema runner destination exists; refusing overwrite.' >&2; exit 1; }
 gh auth status >/dev/null
 account="$(gh api user --jq '.login')"
@@ -32,7 +38,8 @@ chmod 700 "$state"
 work="$(mktemp -d "${dest}.staging.XXXXXXXX")"
 cleanup(){ if [[ ! -e "$dest" ]]; then rm -rf -- "$work"; fi; }
 trap cleanup EXIT
-cp -a "$source_runner/bin" "$source_runner/externals" "$source_runner/config.sh" "$source_runner/run.sh" "$work/"
+cp -a "$source_runner/bin" "$source_runner/externals" "$source_runner/config.sh" "$source_runner/run.sh" \
+  "$source_runner/run-helper.sh.template" "$source_runner/safe_sleep.sh" "$work/"
 [[ ! -f "$source_runner/env.sh" ]] || cp "$source_runner/env.sh" "$work/"
 chmod u+x "$work/config.sh" "$work/run.sh"
 token="$(gh api --method POST "repos/$repo/actions/runners/registration-token" --jq '.token')"
