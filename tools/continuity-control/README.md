@@ -114,3 +114,18 @@ python3 ~/.local/share/blochfield-conductor/source/tools/continuity-control/adop
 ```
 
 The above approval will create and push allowlisted program files to a new private GitHub repo. It never includes private captures or Cloudflare secrets. No production deployment or authority promotion.
+## Private Cinema Actions CI: separate WSL runner
+
+The Cinema repository's first hosted `ubuntu-latest` run was blocked before the job started by a GitHub billing/spending annotation. **This is not a passing build and not an application failure.** NICE-ROBIN's registered repository runner does not automatically belong to the separate Cinema repository.
+
+The [Cinema draft PR #1](https://github.com/YasmindIess/continuity-cinema/pull/1) therefore uses `[self-hosted, linux, x64, generalized]` and refuses fork-origin PR code. To enroll a separate runner, one explicit local operator action is required:
+
+```bash
+bash ~/.local/share/blochfield-conductor/source/tools/continuity-control/enroll_cinema_runner.sh --approve-repository-runner
+```
+
+The script verifies authenticated GitHub ownership and the private repository, copies only the executable distribution from the previously installed Blochfield/NICE-ROBIN runner into a **new isolated directory**, and registers a unique runner. It never changes an existing runner's `.runner` or `.credentials`, modifies account spending, or touches the Cinema application or its captures. The third-terminal supervisor then starts/owns the newly registered runner on its next poll, exposes `cinema_ci_runner` in status, and holds its own self-reexecution while that runner reports an active job.
+
+The hosted `main` CI failure does not become green retroactively. A successful exact-head Cinema workflow must run on the registered repo runner; only after an explicitly reviewed integration into Cinema's pinned main branch can the conductor perform its CI-gated checkout cutover.
+
+Terminal reports now sample Linux process-group CPU/RSS and actual HTTP latency; these values are observations, not fake activity. A reporter automatically restarts its curses drawing code when a GitHub-pulled file update changes its mtime, but never restarts its underlying server. The β×R userscript is still an independently installed browser extension and must follow its explicit browser-manager installation/update path.
