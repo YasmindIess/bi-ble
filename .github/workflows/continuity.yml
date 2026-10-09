@@ -20,8 +20,10 @@ jobs:
           version: 11.17.0
       - name: Validate local continuity CI gate syntax
         run: node --check tools/continuity-control/ci-gate.mjs
-      - name: Validate third-terminal supervisor syntax
-        run: python3 -m py_compile tools/continuity-control/live_supervisor.py
+      - name: Validate third-terminal supervisor and safety fixtures
+        run: |
+          python3 -m py_compile tools/continuity-control/live_supervisor.py
+          python3 -m unittest discover -s tools/continuity-control -p 'test_live_supervisor.py' -v
       - run: pnpm install --frozen-lockfile
       - run: node --test tools/continuity-plan.test.mjs tools/continuity-editor.test.mjs tools/receipt-reconcile.test.mjs
       - run: pnpm editor:lint
