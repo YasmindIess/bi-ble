@@ -60,8 +60,16 @@ def exact_ci(repo, sha, directory):
         key = str(r.get("workflow_id") or r.get("name"))
         if key not in latest or r.get("created_at", "") > latest[key].get("created_at", ""):
             latest[key] = r
-    if any(r.get("status") != "completed" or r.get("conclusion") != "success" for r in latest.values()):
-        raise RuntimeError("exact-head CI not fully green")
+    for item in latest.values():
+        status=item.get("status")
+        conclusion=item.get("conclusion")
+        if status == "completed" and conclusion == "success":
+            continue
+        run_id=item.get("id","unknown")
+        name=str(item.get("name") or "workflow")[:55]
+        if status in ("queued","waiting","pending","requested","in_progress"):
+            raise RuntimeError(f"CI pending: {name} run {run_id} ({status})")
+        raise RuntimeError(f"CI not passed: {name} run {run_id} ({status}/{conclusion or 'none'})")
     return len(latest)
 
 def synchronize(name, repo, directory, branch):
