@@ -144,6 +144,7 @@ def main():
     log("Blochfield third runtime active: clean fast-forward + exact-head CI + local reload")
     log("External processes are never killed. Stop the old Cinema once to transfer ownership.")
     pending = {"cinema": False, "vite": False}
+    self_update_pending = False
     try:
         while not STOP:
             repos = [synchronize(*p) for p in REPOS]
@@ -174,7 +175,8 @@ def main():
             write_status({"schema": "blochfield-live-conductor-v1", "checked_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "repos": [*repos, control], "cinema": cinema, "vite": vite, "unmerged": True,
                 "release_authorized": False, "production_deployed": False})
-            if control['state'] == 'updated':
+            self_update_pending |= control['state'] == 'updated'
+            if self_update_pending:
                 if busy_capture():
                     log('Supervisor source updated: postpone self-restart until capture ends')
                 else:
