@@ -177,8 +177,10 @@ def report(mode, state, remote, previous, now):
         latest = (captures.get("cycles") or [{}])[0]
         rows.extend([
             ("section", "CAPTURE & EVIDENCE"),
-            ("good" if state.get("cinema_ci_runner")=="owned" else "held",
-             f"  Repository CI runner: {state.get('cinema_ci_runner','not registered')}"),
+            ("good" if (state.get("cinema_runner_connection") or {}).get("state")=="online" else "held",
+             f"  GitHub runner: {(state.get('cinema_runner_connection') or {}).get('state','unknown')}  |  busy: {(state.get('cinema_runner_connection') or {}).get('busy','unknown')}"),
+            ("normal", f"  Local runner process: {state.get('cinema_ci_runner','not reported')}"),
+            ("normal", f"  Launcher helpers: {'present' if state.get('cinema_runner_launch_files_ready') else 'unverified'}"),
             ("good" if loop.get("status")=="passed" else "held" if loop.get("status")=="held" else "running" if loop.get("status")=="running" else "normal",
              f"  Loop: {loop.get('status','unavailable')}  |  Phase: {loop.get('phase','—')}"),
             ("normal", f"  Last loop: {(loop.get('last') or {}).get('status','none')}"),
