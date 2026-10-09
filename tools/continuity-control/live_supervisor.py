@@ -161,10 +161,15 @@ def main():
                     try:
                         # Even an unchanged adopted checkout must pass CI before cutover.
                         managed["ci_workflows"] = exact_ci(CINEMA_REPO, managed["head"], MANAGED_CINEMA)
-                        if not (MANAGED_CINEMA / "node_modules/playwright").is_dir() or managed["state"] == "updated":
+                        needs_install = (not (MANAGED_CINEMA / "node_modules/playwright").is_dir()
+                                         or managed["state"] == "updated")
+                        if needs_install:
                             run(["npm", "ci", "--no-audit", "--no-fund"], MANAGED_CINEMA, timeout=180)
+                        browser_ready = MANAGED_CINEMA / "node_modules/.cinema-chromium-ready"
+                        if needs_install or not browser_ready.exists():
                             run(["npx", "--no-install", "playwright", "install", "chromium"],
                                 MANAGED_CINEMA, timeout=300)
+                            browser_ready.write_text("chromium provisioned by continuity conductor\n")
                         managed_ready = True
                     except Exception as exc:
                         managed.update({"state": "held", "reason": "Cinema CI/runtime prerequisite: " + str(exc)[:150]})
