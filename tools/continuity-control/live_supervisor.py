@@ -95,11 +95,23 @@ def synchronize(name, repo, directory, branch):
     return report
 
 def busy_capture():
-    try:
-        with urllib.request.urlopen("http://127.0.0.1:8765/api/loop/status", timeout=2) as r:
-            return json.load(r).get("status") == "running"
-    except Exception:
+    """Preserve both operator-loop and direct/manual Cinema captures.
+
+    If an HTTP server is listening but its status cannot be inspected, hold
+    restarts rather than risk terminating a live recording or publication.
+    """
+    if not listening(8765):
         return False
+    for endpoint in ("api/loop/status", "api/cycle"):
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:8765/" + endpoint,
+                                        timeout=1.25) as response:
+                status = json.load(response).get("status")
+                if status in ("running", "publishing"):
+                    return True
+        except (OSError, ValueError, TypeError, KeyError):
+            return True
+    return False
 
 def start(name, command, directory, port, extra_env=None):
     child = CHILDREN.get(name)
