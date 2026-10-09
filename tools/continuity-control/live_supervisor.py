@@ -2,6 +2,7 @@
 """Third-terminal GitHub→WSL live conductor. Never deploys, merges, or pushes."""
 import json
 import os
+import hashlib
 from pathlib import Path
 import shutil
 import signal
@@ -145,6 +146,46 @@ def start(name, command, directory, port, extra_env=None):
     except OSError as exc:
         return f"could not start: {exc}"
 
+def repair_runner_launch_files():
+    """Repair omissions in the initial private runner clone, never its credentials.
+
+    run.sh needs run-helper.sh.template, which can call safe_sleep.sh. The
+    initial Cinema enrollment copied run.sh but neither helper. Require the
+    exact same run.sh bytes in the trusted source before copying anything.
+    Refuse symlinks and existing replacements; only create missing helpers.
+    """
+    required=("run-helper.sh.template", "safe_sleep.sh")
+    if not (CI_RUNNER / ".runner").is_file():
+        return "unregistered"
+    launcher=CI_RUNNER / "run.sh"
+    if not launcher.is_file() or launcher.is_symlink():
+        return "missing or unsafe runner launcher"
+    missing=[n for n in required if not (CI_RUNNER / n).is_file()]
+    if not missing:
+        if any((CI_RUNNER / n).is_symlink() for n in required):
+            return "unsafe runner helper symlink"
+        return None
+    for source in (HOME / "actions-runner-blochfield", HOME / "actions-runner-ngu"):
+        reference=source / "run.sh"
+        if not reference.is_file() or reference.is_symlink():
+            continue
+        if hashlib.sha256(launcher.read_bytes()).digest() != hashlib.sha256(reference.read_bytes()).digest():
+            continue
+        for name in missing:
+            item=source / name
+            if not item.is_file() or item.is_symlink():
+                return f"trusted runner helper {name} unavailable"
+            destination=CI_RUNNER / name
+            if destination.exists() or destination.is_symlink():
+                return f"unexpected destination {name}; refusing overwrite"
+            # Exclusive creation: prevents overwriting registered runner material.
+            with destination.open("xb") as out:
+                out.write(item.read_bytes())
+            destination.chmod(item.stat().st_mode & 0o777)
+        return None
+    return "no matching trusted runner distribution; helper repair held"
+
+
 def start_ci_runner():
     """Own a separately registered private-repo runner; never reuse NICE-ROBIN runner."""
     child=CHILDREN.get("cinema-runner")
@@ -153,6 +194,9 @@ def start_ci_runner():
     CHILDREN.pop("cinema-runner",None)
     if not (CI_RUNNER / ".runner").is_file() or not (CI_RUNNER / "run.sh").is_file():
         return "not_registered"
+    problem=repair_runner_launch_files()
+    if problem:
+        return "held: "+problem
     STATE.parent.mkdir(parents=True,exist_ok=True)
     fd=os.open(str(STATE.parent / "cinema-runner.log"),
                os.O_WRONLY|os.O_APPEND|os.O_CREAT,0o600)
@@ -307,6 +351,9 @@ def main():
                 "service_pids": {n: (p.pid if p.poll() is None else None)
                                  for n, p in CHILDREN.items()},
                 "cinema_ci_runner": ci_runner,
+                "cinema_runner_launch_files_ready": all(
+                    (CI_RUNNER / name).is_file()
+                    for name in ("run.sh", "run-helper.sh.template", "safe_sleep.sh")),
                 "repos": [*repos, control, managed], "cinema": cinema, "vite": vite,
                 "cinema_source": "github" if cinema_managed else "legacy",
                 "cinema_managed_branch": CINEMA_BRANCH if cinema_managed else None, "unmerged": True,
