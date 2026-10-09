@@ -1,5 +1,6 @@
 """Offline regression checks for the third-terminal supervisor."""
 import importlib.util
+import io
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase, main
@@ -45,6 +46,37 @@ class SupervisorSafetyTests(TestCase):
             outcome = mod.start("cinema", ["bash", "run-local.sh"], Path("/tmp"), 8765)
         self.assertIn("external", outcome)
         self.assertNotIn("cinema", mod.CHILDREN)
+
+    def test_direct_capture_blocks_supervisor_restart(self):
+        def response(request, timeout=1.25):
+            data = '{"status":"idle"}' if request.endswith('/api/loop/status') else '{"status":"running"}'
+            return io.BytesIO(data.encode())
+        with patch.object(mod, "listening", return_value=True), \
+             patch.object(mod.urllib.request, "urlopen", side_effect=response) as fetch:
+            self.assertTrue(mod.busy_capture())
+            self.assertEqual(fetch.call_count, 2)
+
+    def test_operator_cycle_blocks_supervisor_restart(self):
+        with patch.object(mod, "listening", return_value=True), \
+             patch.object(mod.urllib.request, "urlopen", return_value=io.BytesIO(b'{"status":"running"}')) as fetch:
+            self.assertTrue(mod.busy_capture())
+            self.assertEqual(fetch.call_count, 1)
+
+    def test_unreadable_active_server_fails_closed(self):
+        with patch.object(mod, "listening", return_value=True), \
+             patch.object(mod.urllib.request, "urlopen", side_effect=OSError("status unavailable")):
+            self.assertTrue(mod.busy_capture())
+
+    def test_both_capture_views_idle_allow_restart(self):
+        with patch.object(mod, "listening", return_value=True), \
+             patch.object(mod.urllib.request, "urlopen", return_value=io.BytesIO(b'{"status":"idle"}')):
+            self.assertFalse(mod.busy_capture())
+
+    def test_absent_server_is_not_treated_as_active_capture(self):
+        with patch.object(mod, "listening", return_value=False), \
+             patch.object(mod.urllib.request, "urlopen") as fetch:
+            self.assertFalse(mod.busy_capture())
+            fetch.assert_not_called()
 
     def test_no_new_head_means_no_ci_or_merge(self):
         with TemporaryDirectory() as tmp:
