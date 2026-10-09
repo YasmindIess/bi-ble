@@ -26,6 +26,7 @@ CONTROL = Path(__file__).resolve().parents[2]
 CONTROL_BRANCH = "feat/continuity-conductor-v1"
 POLL = max(20, int(os.environ.get("BLOCHFIELD_POLL_SECONDS", "45")))
 STATE = HOME / ".local/state/blochfield-conductor/status.json"
+EVENTS = STATE.with_name("events.jsonl")
 CHILDREN = {}
 STOP = False
 
@@ -109,8 +110,16 @@ def start(name, command, directory, port, extra_env=None):
     if not directory.is_dir():
         return "missing checkout"
     try:
-        CHILDREN[name] = subprocess.Popen(command, cwd=str(directory), start_new_session=True,
-            env={**os.environ, "CINEMA_BACKGROUND_SYNC": "0", **(extra_env or {})})
+        STATE.parent.mkdir(parents=True, exist_ok=True)
+        os.chmod(STATE.parent, 0o700)
+        logfile = STATE.parent / (name + ".log")
+        fd = os.open(str(logfile), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        with os.fdopen(fd, "ab", buffering=0) as stream:
+            CHILDREN[name] = subprocess.Popen(
+                command, cwd=str(directory), start_new_session=True,
+                stdout=stream, stderr=subprocess.STDOUT,
+                env={**os.environ, "CINEMA_BACKGROUND_SYNC": "0", **(extra_env or {})}
+            )
         return "started"
     except OSError as exc:
         return f"could not start: {exc}"
@@ -129,9 +138,34 @@ def stop_owned(name):
     CHILDREN.pop(name, None)
     return True
 
+def append_event(subject, state, detail):
+    event = {"at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+             "subject": subject, "state": state, "detail": str(detail)[:120]}
+    fd = os.open(str(EVENTS), os.O_CREAT | os.O_WRONLY | os.O_APPEND, 0o600)
+    with os.fdopen(fd, "a", encoding="utf-8") as stream:
+        stream.write(json.dumps(event, separators=(",", ":")) + "\n")
+
+
 def write_status(value):
     STATE.parent.mkdir(parents=True, exist_ok=True)
     os.chmod(STATE.parent, 0o700)
+    try:
+        previous = json.loads(STATE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        previous = {}
+    prev_repos = {r["name"]: r for r in previous.get("repos", []) if "name" in r}
+    for row in value.get("repos", []):
+        name = row.get("name")
+        earlier = prev_repos.get(name, {})
+        if row.get("head") != earlier.get("head") and row.get("head"):
+            append_event(name, "revision", row["head"][:16])
+        elif row.get("state") != earlier.get("state") and row.get("state") != "current":
+            append_event(name, row.get("state"), row.get("reason") or row.get("branch", ""))
+    for name in ("cinema", "vite"):
+        if value.get(name) != previous.get(name):
+            append_event(name, "runtime", value.get(name, "unknown"))
+    if value.get("cinema_source") != previous.get("cinema_source"):
+        append_event("cinema", "source", value.get("cinema_source"))
     tmp = STATE.with_name(f".status-{os.getpid()}.tmp")
     tmp.write_text(json.dumps(value, indent=2), encoding="utf-8")
     tmp.chmod(0o600)
@@ -205,6 +239,8 @@ def main():
                     log(f"{name}: restarted after verified source update")
             write_status({"schema": "blochfield-live-conductor-v1", "checked_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "runtime_marker": "github-self-update-smoke-v1", "supervisor_pid": os.getpid(),
+                "service_pids": {n: (p.pid if p.poll() is None else None)
+                                 for n, p in CHILDREN.items()},
                 "repos": [*repos, control, managed], "cinema": cinema, "vite": vite,
                 "cinema_source": "github" if cinema_managed else "legacy",
                 "cinema_managed_branch": CINEMA_BRANCH if cinema_managed else None, "unmerged": True,
