@@ -5,6 +5,9 @@ No ZIPs. Does not overwrite the running installation, captures, or secrets.
 Only an allowlist of program files is ever staged for GitHub.
 """
 import argparse
+import hashlib
+import struct
+import zlib
 import os
 from pathlib import Path
 import shutil
@@ -28,6 +31,16 @@ SUBDIRS = {
 }
 SOURCE_SUFFIXES = {".mjs"}
 BAD_MARKERS = (b"-----BEGIN PRIVATE KEY-----", b"-----BEGIN OPENSSH PRIVATE KEY-----")
+# CI fixture from the known, publicly reproducible bi-ble browser workflow.
+APPROVED_FIXTURE_SHA256 = "b1bd089c1ac2c4d446da8890acbf7df2ab1cc6d9cba5a64705cbd6f9df8030e2"
+
+
+def synthetic_png():
+    def chunk(name, payload):
+        return struct.pack("!I", len(payload)) + name + payload + struct.pack("!I", zlib.crc32(name + payload))
+    return (b"\\x89PNG\\r\\n\\x1a\\n" + chunk(b"IHDR", struct.pack("!IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(b"\\x00\\x00\\x00\\x00\\x00")) + chunk(b"IEND", b""))
+
 
 WORKFLOW = """name: Continuity Cinema integrity and source tests
 on:
@@ -128,6 +141,15 @@ def main():
             target = DEST / rel
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, target)
+        fixture_source = LEGACY / "assets" / "bi-ble-roundtrip.png"
+        fixture_target = DEST / "assets" / "bi-ble-roundtrip.png"
+        fixture_target.parent.mkdir(parents=True, exist_ok=True)
+        if (fixture_source.is_file() and not fixture_source.is_symlink()
+            and hashlib.sha256(fixture_source.read_bytes()).hexdigest() == APPROVED_FIXTURE_SHA256):
+            shutil.copy2(fixture_source, fixture_target)
+        else:
+            # Never upload an unrecognized local screenshot to GitHub.
+            fixture_target.write_bytes(synthetic_png())
         server = DEST / "server.mjs"
         text = server.read_text()
         anchor = "const captures=path.join(root,'captures');"
