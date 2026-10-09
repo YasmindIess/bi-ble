@@ -35,7 +35,7 @@ class TerminalReportTests(TestCase):
         self.assertIn("BI-BLE", text)
         self.assertIn("owned", text)
         self.assertIn("feat/test", text)
-        self.assertIn("CI workflows", text)
+        self.assertIn("Incoming CI:", text)
 
     def test_cinema_report_tracks_actual_loop_and_capture(self):
         state = {"cinema": "owned", "repos": [{"name": "cinema", "state": "current",
