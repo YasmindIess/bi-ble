@@ -8,6 +8,7 @@ No Git, GitHub, Cloudflare, or service mutation is performed.
 """
 import argparse
 import curses
+import os
 import json
 from datetime import datetime
 from pathlib import Path
@@ -57,6 +58,34 @@ def tail(path, count=7, max_bytes=12000):
         return []
 
 
+def group_metrics(pgid, prior, now):
+    """Observe Linux process-group CPU/memory without spawning a process."""
+    if not isinstance(pgid, int) or pgid <= 0:
+        return {"members": 0, "rss_mb": None, "cpu_pct": None}, None
+    ticks=pages=members=0
+    try:
+        for item in Path("/proc").iterdir():
+            if not item.name.isdigit():
+                continue
+            try:
+                data=(item/"stat").read_text(encoding="utf-8").rsplit(")",1)[1].split()
+                if int(data[2]) != pgid:
+                    continue
+                ticks += int(data[11])+int(data[12])
+                pages += int(data[21])
+                members += 1
+            except (OSError,ValueError,IndexError):
+                continue
+    except OSError:
+        return {"members": 0, "rss_mb": None, "cpu_pct": None},None
+    if not members:
+        return {"members": 0, "rss_mb": None, "cpu_pct": None},None
+    hz=os.sysconf("SC_CLK_TCK")
+    mem=os.sysconf("SC_PAGE_SIZE")*pages/1048576
+    cpu=None if prior is None or now<=prior[1] else round(max(0,100*(ticks-prior[0])/(hz*(now-prior[1]))),1)
+    return {"members":members,"rss_mb":round(mem,1),"cpu_pct":cpu},(ticks,now)
+
+
 def event_rows():
     records = []
     for line in tail(EVENTS, 14):
@@ -104,6 +133,11 @@ def report(mode, state, remote, previous, now):
     conductor = project_record(state, "conductor")
     heading = "BI-BLE · LIVE EDITOR" if mode == "vite" else "CONTINUITY CINEMA · EVIDENCE"
     http_ok = remote.get("http", False)
+    perf = remote.get("perf") or {}
+    cpu = perf.get("cpu_pct")
+    rss = perf.get("rss_mb")
+    cpu_label = "not sampled" if cpu is None else str(cpu)+"%"
+    mem_label = "not sampled" if rss is None else str(rss)+" MiB"
     rows = [
         ("heading", f"  {heading}  |  127.0.0.1:{port}"),
         ("muted", f"  {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(now))}   q: quit report   r: refresh"),
@@ -111,6 +145,8 @@ def report(mode, state, remote, previous, now):
         ("section", "RUNTIME"),
         ("good" if http_ok else "bad", f"  HTTP: {'200 OK' if http_ok else 'not responding'}   Ownership: {state.get(mode, 'unknown')}"),
         ("normal", f"  Supervisor PID: {state.get('supervisor_pid','?')}   Last poll: {elapsed_label(state.get('checked_at'))}"),
+        ("good" if http_ok else "bad", f"  HTTP latency: {remote.get('latency_ms','—')} ms  |  CPU: {cpu_label}"),
+        ("normal", f"  Process group: {perf.get('members','?')}  |  RSS memory: {mem_label}"),
         ("normal", f"  Git source: {state.get('cinema_source','legacy') if mode == 'cinema' else 'bi-ble checkout'}"),
         ("divider", ""),
         ("section", "SOURCE & GATES"),
@@ -129,6 +165,7 @@ def report(mode, state, remote, previous, now):
         rows.extend([
             ("section", "EDITOR OPERATIONS"),
             ("normal", "  Vite HMR follows verified changes in the pinned checkout."),
+            ("good" if http_ok else "bad", f"  Live preview: {'responsive' if http_ok else 'unavailable'}; production held"),
             ("normal", "  NICE-ROBIN: " + str(project_record(state, "nice-robin").get("head", "unknown"))[:16]),
             ("normal", "  CI results are checked for new heads; no prod deployment."),
         ])
@@ -139,8 +176,10 @@ def report(mode, state, remote, previous, now):
         latest = (captures.get("cycles") or [{}])[0]
         rows.extend([
             ("section", "CAPTURE & EVIDENCE"),
-            ("normal", f"  Loop: {loop.get('status','unavailable')}  |  Phase: {loop.get('phase','—')}"),
+            ("good" if loop.get("status")=="passed" else "held" if loop.get("status")=="held" else "running" if loop.get("status")=="running" else "normal",
+             f"  Loop: {loop.get('status','unavailable')}  |  Phase: {loop.get('phase','—')}"),
             ("normal", f"  Last loop: {(loop.get('last') or {}).get('status','none')}"),
+            ("bad" if loop.get("error") else "muted", f"  Loop hold: {(loop.get('error') or 'none')[:120]}"),
             ("normal", f"  Latest: {fmt_run(latest)}"),
             ("normal", f"  Local recordings: {len(captures.get('cycles') or [])} (recent index)"),
             ("normal", f"  Cloudflare upload: {'configured' if edge.get('configured') else 'not configured'}; automatic={edge.get('auto_push',False)}"),
@@ -175,6 +214,7 @@ def paint(stdscr, rows):
         color = {
             "heading": 3, "section": 4, "good": 2,
             "bad": 5, "muted": 6, "normal": 1, "divider": 6,
+            "running": 7, "held": 8,
         }.get(kind, 1)
         attribute = curses.color_pair(color) | (curses.A_BOLD if kind in ("heading", "section") else 0)
         try:
@@ -193,13 +233,15 @@ def watch(stdscr, mode):
     curses.use_default_colors()
     for idx, fg in ((1, curses.COLOR_WHITE), (2, curses.COLOR_GREEN),
                     (3, curses.COLOR_CYAN), (4, curses.COLOR_YELLOW),
-                    (5, curses.COLOR_RED), (6, -1)):
+                    (5, curses.COLOR_RED), (6, -1),
+                    (7, curses.COLOR_CYAN), (8, curses.COLOR_MAGENTA)):
         curses.init_pair(idx, fg, -1)
     stdscr.nodelay(True)
     stdscr.keypad(True)
     cache = {"http": False}
     latest_remote = 0
     last_paint = None
+    previous_usage = None
     while True:
         now = time.time()
         key = stdscr.getch()
@@ -207,7 +249,12 @@ def watch(stdscr, mode):
             break
         if now - latest_remote > 2 or key == ord("r"):
             port = "5173/" if mode == "vite" else "8765/"
+            started=time.perf_counter()
             cache["http"] = ping(port)
+            cache["latency_ms"] = round((time.perf_counter()-started)*1000,1)
+            status_sample=read_json(STATUS)
+            service_pid=(status_sample.get("service_pids") or {}).get(mode)
+            cache["perf"],previous_usage=group_metrics(service_pid,previous_usage,time.monotonic())
             if mode == "cinema":
                 cache["loop"] = get_local("8765/api/loop/status") or {}
                 cache["captures"] = get_local("8765/api/captures") or {}
