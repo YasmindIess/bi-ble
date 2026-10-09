@@ -57,3 +57,26 @@ cat "$HOME/.local/state/blochfield-conductor/status.json"
 Stop the third terminal with Ctrl+C to stop services it owns. It does not alter captures, credentials, GitHub PR merge state, Cloudflare publication, or production deployment.
 
 **Remaining limitation:** Cinema source itself is not yet tracked as a standalone Git checkout. This supervisor restarts Cinema on upstream bi-ble/NICE-ROBIN updates and Node watch reloads local Cinema edits, but it cannot fetch new Cinema application code until that source is hosted in an approved Git checkout. This is a local development supervisor, not production CD.
+## Cinema's private GitHub-native source (no ZIP)
+
+The third-terminal supervisor can now switch Cinema to an independently versioned **private** repository, while preserving its original recordings in the existing legacy directory. GitHub migration is a deliberate one-time source-adoption action; the supervisor does not silently upload local files merely because it received an update.
+
+After the supervisor updates itself to this feature revision, run:
+
+```bash
+python3 ~/.local/share/blochfield-conductor/source/tools/continuity-control/adopt_cinema.py
+```
+
+This is a dry-run listing only. If the path and source selection are correct, explicitly approve private source upload:
+
+```bash
+python3 ~/.local/share/blochfield-conductor/source/tools/continuity-control/adopt_cinema.py --approve-private-upload
+```
+
+This creates `YasmindIess/continuity-cinema` as a **private** GitHub repository, using only allowlisted application files from the already-running installation. It excludes `captures/`, `node_modules/`, hidden .env files, local credentials, and unrecognized screenshots. The known public CI fixture is copied only if it matches its pinned SHA-256. The original Cinema directory is not modified or deleted.
+
+The supervisor observes the new Git checkout at `~/.local/share/blochfield-cinema/source`, waits for exact-head **green CI**, installs pinned npm dependencies, and only then switches its owned port 8765 runtime to that checkout. It supplies `CINEMA_CAPTURES_DIR` pointing to the original unchanged capture archive. On later GitHub pushes to `main`, it repeats CI-gated fast-forward and Cinema restart. A failed or missing CI run leaves the original runtime running.
+
+`gh`, `git`, `npm`, and a correctly authenticated GitHub account with permission to create a private repository are prerequisites. If the target repository already exists, this script refuses to replace it. The original userscript has **not** been silently upgraded by this migration; Git-hosted Cinema scripts still need their own loader/distribution mechanism.
+
+No PR merge, production deployment, NGU contract write, or authority promotion is performed.
