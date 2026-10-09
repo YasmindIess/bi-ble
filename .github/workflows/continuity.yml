@@ -22,6 +22,7 @@ jobs:
         run: node --check tools/continuity-control/ci-gate.mjs
       - name: Validate third-terminal supervisor and safety fixtures
         run: |
+          bash -n tools/continuity-control/enroll_cinema_runner.sh
           python3 -m py_compile tools/continuity-control/live_supervisor.py
           python3 -m unittest discover -s tools/continuity-control -p 'test_*.py' -v
       - run: pnpm install --frozen-lockfile
