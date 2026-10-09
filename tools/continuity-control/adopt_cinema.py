@@ -64,9 +64,10 @@ jobs:
       - run: npm test
       - name: Verify private evidence stays excluded
         run: |
-          test ! -e captures
-          test ! -e .env
-          test ! -e node_modules/.cache
+          if git ls-files | grep -E '^(captures/|node_modules/|\\.env($|\\.))'; then
+            echo 'Sensitive runtime files included in Git index' >&2
+            exit 1
+          fi
           node --check server.mjs
           node --check cycle-browser.mjs
 """
@@ -83,9 +84,6 @@ def command(argv, cwd=None, timeout=120):
 def select_sources():
     if not LEGACY.is_dir() or not (LEGACY / "server.mjs").is_file():
         raise RuntimeError("Existing Cinema source directory unavailable; nothing changed")
-    for p in LEGACY.rglob("*"):
-        if p.is_symlink() and (p.parent == LEGACY or p.parent.name in SUBDIRS):
-            raise RuntimeError("Symlink found in candidate program files; held")
     files = []
     for p in LEGACY.iterdir():
         if p.is_file() and (p.name in TOP or p.suffix in SOURCE_SUFFIXES):
@@ -99,6 +97,8 @@ def select_sources():
     ):
         raise RuntimeError("Required application files missing; cannot adopt incomplete Cinema")
     for p in files:
+        if p.is_symlink() or p.parent.is_symlink():
+            raise RuntimeError("Symlink found in candidate program files; held")
         raw = p.read_bytes()
         if len(raw) > 750_000 or any(marker in raw for marker in BAD_MARKERS):
             raise RuntimeError(f"Unapproved or sensitive program file: {p.name}")
