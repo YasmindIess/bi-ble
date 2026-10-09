@@ -189,10 +189,16 @@ function App() {
     await verifyReceipt(receipt,handoff,proposal);
     if(latestDocumentRef.current!==snapshot)
       throw Error("Formula changed during receipt verification; retry.");
-    if(workerArtifacts.some(a=>a.receipt.receipt_sha256===receipt.receipt_sha256))
+    const existing=workerArtifacts.find(a=>a.receipt.receipt_sha256===receipt.receipt_sha256);
+    if(existing && (existing.proposal!==null || proposal===null))
       throw Error("Receipt already imported; reuse is not a new observation.");
-    if(workerArtifacts.length>=16)throw Error("Local evidence cache bound reached (16 receipts).");
-    const next=[...workerArtifacts,{receipt,proposal}];
+    // A previously unresolved receipt can gain its missing proposal without
+    // creating a second observation. Re-verify the original content and bindings.
+    if(workerArtifacts.length>=16 && !existing)
+      throw Error("Local evidence cache bound reached (16 receipts).");
+    const next=existing
+      ?workerArtifacts.map(a=>a.receipt.receipt_sha256===receipt.receipt_sha256?{receipt:a.receipt,proposal}:a)
+      :[...workerArtifacts,{receipt,proposal}];
     try{localStorage.setItem("bi-ble.continuity.worker-evidence.v1",JSON.stringify(next));}
     catch{throw Error("Unable to preserve local receipt evidence; import canceled.");}
     setWorkerArtifacts(next);
