@@ -67,6 +67,14 @@ const definitions: Record<string, PortTemplate[]> = {
     }
   ],
 
+  "core:continuity-task": [
+    { key: "requires-1", label: "Depends on 1", direction: "input", dataType: "core:continuity" },
+    { key: "requires-2", label: "Depends on 2", direction: "input", dataType: "core:continuity" },
+    { key: "requires-3", label: "Depends on 3", direction: "input", dataType: "core:continuity" },
+    { key: "requires-4", label: "Depends on 4", direction: "input", dataType: "core:continuity" },
+    { key: "continuity-out", label: "Task", direction: "output", dataType: "core:continuity" }
+  ],
+
   "gravity:network": [
     {
       key: "network-output",

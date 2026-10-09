@@ -447,7 +447,14 @@ export async function compileFormula(
         port.id
       );
 
-      if (!occupiedInputs.has(inputKey)) {
+      // Dependency inputs on a Continuity task are optional.
+      const optionalContinuityInput =
+        node.domain === "core" &&
+        node.kind === "continuity-task" &&
+        /^requires-[1-4]$/.test(port.key) &&
+        port.dataType === "core:continuity";
+
+      if (!occupiedInputs.has(inputKey) && !optionalContinuityInput) {
         obstructions.push({
           id:
             `obstruction-required-input-` +

@@ -1,0 +1,49 @@
+name: bi-ble continuity and editor
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.17.0
+      - run: pnpm install --frozen-lockfile
+      - run: node --test tools/continuity-plan.test.mjs tools/continuity-editor.test.mjs tools/receipt-reconcile.test.mjs
+      - run: pnpm editor:lint
+      - run: pnpm editor:build
+      - name: Prepare headless Chromium for editor round trip
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bi-ble-browser" --no-save --no-package-lock --no-audit --no-fund playwright@1.56.1
+          "$RUNNER_TEMP/bi-ble-browser/node_modules/.bin/playwright" install chromium
+      - name: Browser walkaround against actual NICE-ROBIN worker bytes
+        run: |
+          pnpm editor:web > "$RUNNER_TEMP/bi-ble-vite.log" 2>&1 &
+          editor_pid=$!
+          trap 'kill "$editor_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:5173/ > /dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:5173/ > /dev/null
+          PLAYWRIGHT_MODULE="$RUNNER_TEMP/bi-ble-browser/node_modules/playwright/index.mjs" \
+          BROWSER_SCREENSHOT="$RUNNER_TEMP/bi-ble-roundtrip.png" \
+            node tools/continuity-browser-smoke.mjs
+      - name: Preserve editor walkaround screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bi-ble-continuity-browser
+          path: ${{ runner.temp }}/bi-ble-roundtrip.png
+          if-no-files-found: ignore
+          retention-days: 14

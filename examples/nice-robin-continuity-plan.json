@@ -1,0 +1,60 @@
+{
+  "schema": "bi-ble-continuity-plan-v1",
+  "project": "nice-robin",
+  "execution_boundary": {
+    "mode": "simulation_only",
+    "external_execution_authorized": false,
+    "live_signing_enabled": false
+  },
+  "tasks": [
+    {
+      "id": "review-ci-baseline",
+      "depends_on": [],
+      "priority": 90,
+      "cost_units": 1,
+      "mode": "read_only",
+      "evidence": [
+        "ci"
+      ]
+    },
+    {
+      "id": "audit-public-subtree",
+      "depends_on": [
+        "review-ci-baseline"
+      ],
+      "priority": 80,
+      "cost_units": 2,
+      "mode": "proposal",
+      "evidence": [
+        "package",
+        "security"
+      ]
+    },
+    {
+      "id": "verify-public-wheel",
+      "depends_on": [
+        "audit-public-subtree"
+      ],
+      "priority": 70,
+      "cost_units": 2,
+      "mode": "proposal",
+      "evidence": [
+        "ci",
+        "package"
+      ]
+    },
+    {
+      "id": "prepare-release-report",
+      "depends_on": [
+        "verify-public-wheel"
+      ],
+      "priority": 60,
+      "cost_units": 1,
+      "mode": "proposal",
+      "evidence": [
+        "documentation",
+        "review"
+      ]
+    }
+  ]
+}

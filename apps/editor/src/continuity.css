@@ -1,0 +1,42 @@
+.continuity-card {
+  display: grid; gap: 9px; margin-top: 12px; padding: 12px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--panel-strong); font-size: 10px;
+}
+.continuity-card p { margin: 0; color: var(--muted); line-height: 1.45; }
+.continuity-card label { color: var(--muted); }
+.continuity-card input {
+  width: 100%; padding: 8px; border: 1px solid var(--border);
+  border-radius: 7px; color: var(--text); background: #fff;
+}
+.continuity-card button {
+  padding: 8px; border: 1px solid var(--border);
+  border-radius: 7px; color: var(--text); background: #f5f6f7;
+}
+.continuity-card button:disabled { opacity: 0.55; }
+.continuity-error { color: #9b4038 !important; overflow-wrap: anywhere; }
+.continuity-report { display: grid; gap: 9px; min-width: 0; padding: 9px; background: #f6faf7; border-radius: 8px; }
+.continuity-report > div:first-child { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.continuity-report code { font-size: 8px; overflow-wrap: anywhere; user-select: all; }
+.continuity-actions { display: flex; gap: 6px; }
+.continuity-actions button { flex: 1; }
+.continuity-card small { font-size: 9px; color: var(--muted); line-height: 1.4; }
+.inspector-panel { overflow-y: auto; min-height: 0; }
+
+/* No additional canvas panels: a compact evidence marker on existing task nodes. */
+.continuity-node-evidence { pointer-events: none; }
+.continuity-marker { stroke: #fff; stroke-width: 1.5px; fill: #a1a1aa; }
+.continuity-marker.marker-eligible { fill: #65908e; }
+.continuity-marker.marker-content_integrity_verified { fill: #367b55; }
+.continuity-marker.marker-observed_locally { fill: #a57d37; }
+.continuity-marker.marker-blocked { fill: #a64b43; }
+.continuity-marker.marker-unresolved { fill: #c38b38; }
+.continuity-evidence-summary { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; min-width: 0; }
+.continuity-evidence-summary > strong { overflow-wrap: anywhere; }
+.continuity-evidence-summary > span { font-weight: 600; }
+.continuity-evidence-item { display: grid; gap: 5px; padding-top: 7px; border-top: 1px solid var(--border); }
+.continuity-evidence-item code { overflow-wrap: anywhere; font-size: 9px; }
+.continuity-import { min-width: 0; border-top: 1px solid var(--border); padding-top: 7px; }
+.continuity-import > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.continuity-import > label { display: block; margin-top: 9px; }
+.continuity-import input[type="file"] { font-size: 9px; min-width: 0; }
