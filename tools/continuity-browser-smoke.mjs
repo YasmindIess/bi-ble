@@ -39,8 +39,8 @@ try {
   await page.getByRole('button',{name:'Connect',exact:true}).click();
   const nodes=page.locator('g.formula-node');
   assert.equal(await nodes.count(),2);
-  await nodes.nth(0).locator('[aria-label="output Task core:continuity"]').click();
-  await nodes.nth(1).locator('[aria-label="input Depends on 1 core:continuity"]').click();
+  await nodes.nth(0).locator('[aria-label="output Task core:continuity"] circle.formula-port-hit-area').click();
+  await nodes.nth(1).locator('[aria-label="input Depends on 1 core:continuity"] circle.formula-port-hit-area').click();
   await page.getByRole('button',{name:'Select',exact:true}).click();
 
   await page.getByRole('button',{name:'Prepare handoff'}).click();
