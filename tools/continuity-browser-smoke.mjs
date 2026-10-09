@@ -25,7 +25,7 @@ try {
     await page.getByLabel('Task ID',{exact:true}).fill(id);
     await page.getByLabel('Priority (0-100)').fill(String(priority));
     await page.getByLabel('Cost units (1-100)').fill(String(cost));
-    await page.getByLabel('Mode',{exact:true}).selectOption(mode);
+    await page.locator('form.property-editor select').selectOption(mode);
     await page.getByLabel('Evidence kinds (comma separated)').fill(evidence);
     await page.getByRole('button',{name:'Apply',exact:true}).click();
     await page.waitForFunction(() => {
@@ -94,6 +94,10 @@ try {
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bi-ble.continuity.worker-evidence.v1')).length),2);
   if(process.env.BROWSER_SCREENSHOT)await page.screenshot({path:process.env.BROWSER_SCREENSHOT,fullPage:true});
   console.log('BROWSER PASS: visual graph → independently recompiled handoff → actual Python worker bytes → local evidence → conflict unresolved; zero authority mutations');
+} catch(error) {
+  if(process.env.BROWSER_SCREENSHOT)
+    await page.screenshot({path:process.env.BROWSER_SCREENSHOT,fullPage:true}).catch(()=>{});
+  throw error;
 } finally {
   await browser.close();
 }
