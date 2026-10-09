@@ -28,7 +28,10 @@ try {
     await page.getByLabel('Mode',{exact:true}).selectOption(mode);
     await page.getByLabel('Evidence kinds (comma separated)').fill(evidence);
     await page.getByRole('button',{name:'Apply',exact:true}).click();
-    await page.getByRole('button',{name:'Apply',exact:true}).waitFor({state:'visible'});
+    await page.waitForFunction(() => {
+      const b=document.querySelector('.property-apply');
+      return b && b.textContent?.trim()==='Apply' && b.disabled;
+    });
   };
   await setTask('audit-public-subtree',90,2,'read_only','package,security');
   await setTask('prepare-release-report',60,1,'proposal','documentation,review');
@@ -49,14 +52,20 @@ try {
   assert.equal(before.document.executionBoundary.externalExecutionAuthorized,false);
 
   await page.locator('.continuity-import summary').click();
+  await page.locator('#continuity-receipt-file').setInputFiles({
+    name:'receipt-pass.json',mimeType:'application/json',buffer:receiptBytes});
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem('bi-ble.continuity.worker-evidence.v1')||'[]').length===1);
+  await nodes.nth(0).click();
+  await page.locator('.continuity-evidence-summary').getByText('Unresolved',{exact:true})
+    .waitFor({state:'visible'});
+  // Re-import with the missing proposal to enrich the SAME observation.
   await page.locator('#continuity-proposal-file').setInputFiles({
     name:'proposal.json',mimeType:'application/json',buffer:proposalBytes});
   await page.locator('#continuity-receipt-file').setInputFiles({
     name:'receipt-pass.json',mimeType:'application/json',buffer:receiptBytes});
-  await page.getByText(/Receipt preserved separately/).waitFor({state:'visible'});
-  await nodes.nth(0).click();
   await page.locator('.continuity-evidence-summary').getByText('Content integrity verified',{exact:true})
     .waitFor({state:'visible'});
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bi-ble.continuity.worker-evidence.v1')).length),1);
   assert.equal(await nodes.nth(0).locator('.marker-content_integrity_verified').count(),1);
   assert.equal(await nodes.nth(1).locator('.marker-blocked').count(),1);
   const after=await page.evaluate(()=>JSON.parse(localStorage.getItem('bi-ble.editor.session.v1')));
@@ -66,7 +75,7 @@ try {
   // A failed source preflight remains blocked: never promote it as a success.
   await page.locator('#continuity-receipt-file').setInputFiles({
     name:'receipt-blocked.json',mimeType:'application/json',buffer:blockedBytes});
-  await page.getByText(/Receipt preserved separately/).waitFor({state:'visible'});
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem('bi-ble.continuity.worker-evidence.v1')||'[]').length===2);
   await page.locator('.continuity-evidence-summary').getByText('Unresolved',{exact:true})
     .waitFor({state:'visible'});
   assert.equal(await nodes.nth(0).locator('.marker-unresolved').count(),1);
@@ -77,6 +86,12 @@ try {
     assert.equal(r.receipt.independent_verification,'not_established');
     assert.equal(r.receipt.publication_authorized,false);
   }
+  const forged=JSON.parse(receiptBytes.toString('utf8'));
+  forged.publication_authorized=true;
+  await page.locator('#continuity-receipt-file').setInputFiles({
+    name:'forged.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(forged))});
+  await page.locator('.continuity-import [role="alert"]').waitFor({state:'visible'});
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bi-ble.continuity.worker-evidence.v1')).length),2);
   if(process.env.BROWSER_SCREENSHOT)await page.screenshot({path:process.env.BROWSER_SCREENSHOT,fullPage:true});
   console.log('BROWSER PASS: visual graph → independently recompiled handoff → actual Python worker bytes → local evidence → conflict unresolved; zero authority mutations');
 } finally {
