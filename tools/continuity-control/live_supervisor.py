@@ -146,6 +146,24 @@ def start_ci_runner():
         return "held: "+str(exc)[:100]
 
 
+def cinema_runner_busy():
+    """Conservatively defer supervisor self-reexec while its own CI runner is busy."""
+    child=CHILDREN.get("cinema-runner")
+    if not child or child.poll() is not None:
+        return False
+    try:
+        registration=json.loads((CI_RUNNER / ".runner").read_text(encoding="utf-8"))
+        runner_name=registration["agentName"]
+        result=json.loads(run(["gh","api",
+            "repos/YasmindIess/continuity-cinema/actions/runners?per_page=100"],
+            CONTROL,timeout=18))
+        match=next((item for item in result.get("runners",[])
+                    if item.get("name")==runner_name),None)
+        return match is None or match.get("busy") is not False
+    except (OSError,ValueError,KeyError,RuntimeError,subprocess.TimeoutExpired):
+        return True
+
+
 def stop_owned(name):
     child = CHILDREN.get(name)
     if child is None:
@@ -275,8 +293,8 @@ def main():
                 "release_authorized": False, "production_deployed": False})
             self_update_pending |= control['state'] == 'updated'
             if self_update_pending:
-                if busy_capture():
-                    log('Supervisor source updated: postpone self-restart until capture ends')
+                if busy_capture() or cinema_runner_busy():
+                    log('Supervisor source updated: postpone self-reexec while capture or Cinema CI is busy')
                 else:
                     log('Supervisor source updated and CI-verified: restart supervised processes and re-exec')
                     if stop_owned('cinema') and stop_owned('vite') and stop_owned('cinema-runner'):
