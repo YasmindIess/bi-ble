@@ -177,6 +177,10 @@ def report(mode, state, remote, previous, now):
         latest = (captures.get("cycles") or [{}])[0]
         rows.extend([
             ("section", "CAPTURE & EVIDENCE"),
+            ("good" if state.get("cinema_capture_runtime") in ("ready","ready: managed CI-admitted checkout")
+             else "running" if str(state.get("cinema_capture_runtime","")).startswith("checking")
+             else "held",
+             f"  Chromium readiness: {state.get('cinema_capture_runtime','not yet checked')}"),
             ("good" if (state.get("cinema_runner_connection") or {}).get("state")=="online" else "held",
              f"  GitHub runner: {(state.get('cinema_runner_connection') or {}).get('state','unknown')}  |  busy: {(state.get('cinema_runner_connection') or {}).get('busy','unknown')}"),
             ("normal", f"  Local runner process: {state.get('cinema_ci_runner','not reported')}"),
