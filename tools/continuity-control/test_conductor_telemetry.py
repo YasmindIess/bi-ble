@@ -112,7 +112,12 @@ class IndependentObservatoryTests(TestCase):
         with TemporaryDirectory() as td:
             p = Path(td)/"status.json"
             p.write_text(json.dumps(self.sample()))
-            server = telemetry.start(p, port=0)
+            script_root = Path(td)/"previews"
+            head = "b"*40
+            script = script_root/head/"userscripts"/"continuity-cinema-bridge.user.js"
+            script.parent.mkdir(parents=True)
+            script.write_text("// ==UserScript==\\n// @version 0.7.4\\n// ==/UserScript==\\n")
+            server = telemetry.start(p, port=0, script_root=script_root)
             try:
                 self.assertEqual(server.server_address[0], "127.0.0.1")
                 base = f"http://127.0.0.1:{server.server_address[1]}"
@@ -121,6 +126,22 @@ class IndependentObservatoryTests(TestCase):
                     self.assertEqual(response.headers.get("Access-Control-Allow-Origin"), None)
                     self.assertEqual(payload["schema"], "cinema-observatory-v1")
                     self.assertEqual(payload["projects"][0]["name"], "bi-ble")
+                script_url=base+"/userscripts/continuity-cinema-bridge.user.js"
+                with self.assertRaises(HTTPError) as pending:
+                    urlopen(script_url, timeout=2)
+                self.assertEqual(pending.exception.code,404)
+                p.with_name("userscript.json").write_text(json.dumps({
+                    "schema":"bxr-ci-admitted-userscript-v1",
+                    "ci_admitted":True,
+                    "head":head,
+                    "content_sha256":hashlib.sha256(script.read_bytes()).hexdigest()}))
+                with urlopen(script_url,timeout=2) as approved:
+                    self.assertTrue(approved.read().startswith(b"// ==UserScript=="))
+                    self.assertIn("javascript",approved.headers.get("Content-Type"))
+                script.write_bytes(script.read_bytes()+b"tamper")
+                with self.assertRaises(HTTPError) as invalid:
+                    urlopen(script_url,timeout=2)
+                self.assertEqual(invalid.exception.code,404)
                 with self.assertRaises(HTTPError) as missing:
                     urlopen(base+"/userscripts/private.env", timeout=2)
                 self.assertEqual(missing.exception.code, 404)
