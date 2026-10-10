@@ -9,6 +9,7 @@ type AgencyReport = {
   schema:string;record_sha256:string;
   source:{head:string;source_tree_sha256:string;release_input_gaps:string[];tracked_file_count:number};
   selected_task_id:string|null;
+  next_development_task_id?:string|null;
   tasks:AgencyTask[];
   execution:{status:string;files_parsed?:number;failures?:Array<{path:string;reason:string}>};
   choir_runtime_invoked:false;coding_agent_invoked:false;
@@ -62,7 +63,14 @@ export function AgencyWorkPanel(){
        {task.depends_on.length>0&&<small>Blocked on: {task.depends_on.join(", ")}</small>}
       </li>)}
      </ol>
-     <small>Next local candidate: {report.selected_task_id??"None admitted; inspect deferred tasks or changed source"}</small>
+     <small>Next local check: {report.selected_task_id??"None currently admitted"}</small>
+     <div className="agency-work-meta" role="status">
+      <strong>Next development task</strong>
+      <span>{report.tasks.find(t=>t.id===report.next_development_task_id)?.title
+        ??"No coding task currently selected; independent release review remains separate"}</span>
+      {report.next_development_task_id&&
+       <small>Proposal only · requires an authorized coding agent and reviewed diff/CI</small>}
+     </div>
      <code title={report.record_sha256}>Report {report.record_sha256.slice(0,18)}…</code>
      <small>Local source and reported checks are unattested. No independent execution, merge, release or publication permission.</small>
     </div>
