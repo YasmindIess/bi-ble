@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {decodeAgencyProjection} from "../apps/editor/src/model/agency-projection.mjs";
+import {compareAgencyProjections} from "../apps/editor/src/model/agency-transition.mjs";
 
 const canonical=v=>Array.isArray(v)?"["+v.map(canonical).join(",")+"]":
  v!==null&&typeof v==="object"?"{"+Object.keys(v).sort()
@@ -23,13 +24,13 @@ function fixture(){
     cost_units:1,depends_on:[],capability:"bounded_python_ast_parse",
     status:"observed_local_check",evidence_requirement:"local_source_ast_receipt",
     execution_authorized:false},
-   {id:"restore-release-input-1",title:"Restore SECURITY.md",priority:80,
+   {id:"restore-release-input-security-md",title:"Restore SECURITY.md",priority:80,
     cost_units:2,depends_on:[],capability:"code_change_proposal_only",
     status:"needs_authorized_coding_agent",evidence_requirement:"reviewed_source_diff_and_ci",
     execution_authorized:false}
   ],
   selected_task_id:null,
-  next_development_task_id:"restore-release-input-1",
+  next_development_task_id:"restore-release-input-security-md",
   execution:{task_id:"python-ast-check",status:"local_static_check_passed",
    source_tree_sha256:"b".repeat(64),scope:"local_static_parse_only",
    no_repository_mutation:true,independent_witness:false,release_authorized:false,
@@ -63,14 +64,14 @@ test("non-executed and previously checked revisions retain distinct statuses",as
   execution:{...sample.execution,status:"unchanged_prior_local_result"}};
  const output=await decodeAgencyProjection(await encode(previous));
  assert.equal(output.execution.status,"unchanged_prior_local_result");
- const forged={...previous,selected_task_id:"restore-release-input-1"};
+ const forged={...previous,selected_task_id:"restore-release-input-security-md"};
  await assert.rejects(async()=>decodeAgencyProjection(await encode(forged)),/selected task/);
 });
 
 test("next coding candidate is provenance-bound and never an execution permission",async()=>{
  const sample=fixture();
  const value=await decodeAgencyProjection(await encode(sample));
- assert.equal(value.next_development_task_id,"restore-release-input-1");
+ assert.equal(value.next_development_task_id,"restore-release-input-security-md");
  await assert.rejects(async()=>decodeAgencyProjection(await encode({
   ...sample,next_development_task_id:"python-ast-check"
  })),/next development task/);
@@ -78,6 +79,36 @@ test("next coding candidate is provenance-bound and never an execution permissio
   ...sample,next_development_task_id:null
  })),/next development task/);
  const none={...sample,next_development_task_id:null,
-  tasks:sample.tasks.filter(t=>t.id!=="restore-release-input-1")};
+  tasks:sample.tasks.filter(t=>t.id!=="restore-release-input-security-md")};
  assert.equal((await decodeAgencyProjection(await encode(none))).next_development_task_id,null);
+});
+
+test("source-level remediation produces a distinct, non-authoritative task transition",async()=>{
+ const before=await decodeAgencyProjection(await encode(fixture()));
+ const next=fixture();
+ next.source={...next.source,head:"c".repeat(40),release_input_gaps:[]};
+ next.tasks=[next.tasks[0]];
+ next.next_development_task_id=null;
+ const after=await decodeAgencyProjection(await encode(next));
+ const transition=compareAgencyProjections(before,after);
+ assert.equal(transition.state,"different_reported_source_revision");
+ assert.equal(transition.retired_task_candidates.length,1);
+ assert.equal(transition.retired_task_candidates[0].task_id,"restore-release-input-security-md");
+ assert.equal(transition.current_next_development_task_id,null);
+ assert.equal(transition.claimed_task_completion,false);
+ assert.equal(transition.CI_rechecked_for_new_head,false);
+ assert.equal(transition.independent_witness,false);
+ assert.equal(transition.source_execution_attested,false);
+ assert.equal(transition.release_authorized,false);
+});
+test("a repeated source cannot produce fake revision advancement",async()=>{
+ const first=await decodeAgencyProjection(await encode(fixture()));
+ const same=compareAgencyProjections(first,first);
+ assert.equal(same.state,"same_revision_observation_only");
+ assert.equal(same.retired_task_candidates.length,0);
+ const changed=fixture();
+ changed.source={...changed.source,source_tree_sha256:"d".repeat(64)};
+ changed.execution={...changed.execution,source_tree_sha256:"d".repeat(64)};
+ const different=await decodeAgencyProjection(await encode(changed));
+ assert.throws(()=>compareAgencyProjections(first,different),/same source revision/);
 });
