@@ -13,6 +13,49 @@ spec.loader.exec_module(mod)
 
 
 class SupervisorSafetyTests(TestCase):
+    def test_scoped_worker_presence_and_runner_remote_uncertainty(self):
+        with TemporaryDirectory() as td:
+            root=Path(td)
+            runner=root/"cinema-runner"
+            bin_dir=runner/"bin"
+            bin_dir.mkdir(parents=True)
+            binary=bin_dir/"Runner.Worker"
+            binary.write_bytes(b"fixture apphost")
+            proc=root/"proc"
+            proc.mkdir()
+            with patch.object(mod,"CI_RUNNER",runner):
+                self.assertIs(mod.local_cinema_runner_worker_active(proc),False)
+                (proc/"145").mkdir()
+                (proc/"145"/"exe").symlink_to(binary)
+                self.assertIs(mod.local_cinema_runner_worker_active(proc),True)
+                (proc/"145"/"exe").unlink()
+                with patch.object(mod,"CHILDREN",{"cinema-runner":type("P",(),{"poll":lambda self:None})()}), \
+                     patch.object(mod,"local_cinema_runner_worker_active",return_value=False):
+                    self.assertFalse(mod.cinema_runner_busy({"state":"unverified","busy":None}))
+                    self.assertTrue(mod.cinema_runner_busy({"state":"online","busy":True}))
+                with patch.object(mod,"CHILDREN",{"cinema-runner":type("P",(),{"poll":lambda self:None})()}), \
+                     patch.object(mod,"local_cinema_runner_worker_active",return_value=None):
+                    self.assertTrue(mod.cinema_runner_busy({"state":"unverified","busy":None}))
+                    self.assertFalse(mod.cinema_runner_busy({"state":"online","busy":False}))
+
+    def test_worker_fallback_recognizes_only_owned_runner_path(self):
+        with TemporaryDirectory() as td:
+            root=Path(td)
+            runner=root/"cinema-runner"
+            binary=runner/"bin"/"Runner.Worker"
+            binary.parent.mkdir(parents=True)
+            binary.write_bytes(b"fixture")
+            proc=root/"proc"
+            proc.mkdir()
+            (proc/"123").mkdir()
+            (proc/"123"/"exe").symlink_to("/bin/true")
+            (proc/"123"/"cwd").symlink_to(runner)
+            (proc/"123"/"cmdline").write_bytes(b"./bin/Runner.Worker\\x00")
+            with patch.object(mod,"CI_RUNNER",runner):
+                self.assertIs(mod.local_cinema_runner_worker_active(proc),True)
+                (proc/"123"/"cmdline").write_bytes(b"/tmp/elsewhere/Runner.Worker\\x00")
+                self.assertIs(mod.local_cinema_runner_worker_active(proc),False)
+
     def test_repair_missing_runner_helpers_without_touching_credentials(self):
         with TemporaryDirectory() as temp:
             home=Path(temp)
