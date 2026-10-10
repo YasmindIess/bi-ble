@@ -186,6 +186,48 @@ def repair_runner_launch_files():
     return "no matching trusted runner distribution; helper repair held"
 
 
+def ensure_capture_runtime(directory):
+    """Prepare existing Cinema's Playwright import and Chromium without touching source.
+
+    Only the legacy (non-Git-managed) application can be repaired here. A
+    Git-managed checkout is prepared by npm ci after exact-head CI admits it.
+    No active recording can be interrupted or modified by this operation.
+    """
+    if not directory.is_dir() or not (directory / "cycle-browser.mjs").is_file():
+        return "held: Cinema capture source unavailable"
+    configured=os.environ.get("PLAYWRIGHT_MODULE","")
+    if configured and not Path(configured).expanduser().is_file():
+        return "held: configured PLAYWRIGHT_MODULE does not exist; refusing silent override"
+    if busy_capture():
+        return "deferred: capture active or state unreadable"
+    if not shutil.which("node") or not shutil.which("npm") or not shutil.which("npx"):
+        return "held: required Node/npm/npx runtime unavailable"
+    test_script=("import {chromium} from 'playwright'; "
+                 "import fs from 'node:fs'; "
+                 "if (!fs.existsSync(chromium.executablePath())) process.exit(3);")
+    try:
+        run(["node","--input-type=module","-e",test_script],directory,timeout=15)
+        return "ready"
+    except (RuntimeError,subprocess.TimeoutExpired):
+        pass
+    try:
+        # Pinned module, no package.json/package-lock.json changes, no lifecycle scripts.
+        try:
+            run(["node","--input-type=module","-e",
+                 "await import('playwright')"],directory,timeout=15)
+        except (RuntimeError,subprocess.TimeoutExpired):
+            run(["npm","install","--no-save","--no-package-lock","--ignore-scripts",
+                 "--no-audit","--no-fund","--exact","playwright@1.56.1"],
+                directory,timeout=240)
+        run(["npx","--no-install","playwright","install","chromium"],
+            directory,timeout=300)
+        run(["node","--input-type=module","-e",test_script],
+            directory,timeout=15)
+        return "ready"
+    except (RuntimeError,subprocess.TimeoutExpired) as exc:
+        return "held: "+str(exc)[:170]
+
+
 def start_ci_runner():
     """Own a separately registered private-repo runner; never reuse NICE-ROBIN runner."""
     child=CHILDREN.get("cinema-runner")
@@ -308,6 +350,8 @@ def main():
     self_update_pending = False
     cinema_managed = False
     prior_messages = {}
+    capture_runtime=None
+    last_capture_check=0.0
     try:
         while not STOP:
             repos = [synchronize(*p) for p in REPOS]
@@ -343,6 +387,14 @@ def main():
             pending["cinema"] |= managed["state"] == "updated" or (managed_ready != cinema_managed)
             cinema_dir = MANAGED_CINEMA if managed_ready else CINEMA
             cinema_env = {"CINEMA_CAPTURES_DIR": str(CINEMA / "captures")} if managed_ready else {}
+            if managed_ready:
+                capture_runtime="ready: managed CI-admitted checkout"
+            elif time.monotonic()-last_capture_check > (300 if capture_runtime=="ready" else 45):
+                capture_runtime=ensure_capture_runtime(CINEMA)
+                last_capture_check=time.monotonic()
+                if prior_messages.get("capture-runtime")!=capture_runtime:
+                    log("capture runtime: "+capture_runtime)
+                    prior_messages["capture-runtime"]=capture_runtime
             pending["vite"] |= repos[0]["state"] == "updated"
             cinema = start("cinema", ["bash", "./run-local.sh"], cinema_dir, 8765, cinema_env)
             if cinema == "started":
@@ -373,6 +425,7 @@ def main():
                                  for n, p in CHILDREN.items()},
                 "cinema_ci_runner": ci_runner,
                 "cinema_runner_connection": runner_connection,
+                "cinema_capture_runtime": capture_runtime,
                 "cinema_runner_launch_files_ready": all(
                     (CI_RUNNER / name).is_file()
                     for name in ("run.sh", "run-helper.sh.template", "safe_sleep.sh")),
