@@ -177,6 +177,12 @@ def report(mode, state, remote, previous, now):
         latest = (captures.get("cycles") or [{}])[0]
         rows.extend([
             ("section", "CAPTURE & EVIDENCE"),
+            ("good" if (state.get("cinema_preview") or {}).get("locally_admitted") else
+             "running" if (state.get("cinema_preview") or {}).get("state")=="checking" else "held",
+             f"  Draft v0.7 preview: {(state.get('cinema_preview') or {}).get('state','not prepared')}  |  live: {(state.get('cinema_preview') or {}).get('locally_admitted',False)}"),
+            ("normal", f"  Preview revision: {(state.get('cinema_preview') or {}).get('head','unavailable')}"),
+            ("bad" if (state.get("cinema_preview") or {}).get("reason") else "muted",
+             f"  Preview gate: {(state.get('cinema_preview') or {}).get('reason') or 'no reported obstruction'}"),
             ("good" if state.get("cinema_capture_runtime") in ("ready","ready: managed CI-admitted checkout")
              else "running" if str(state.get("cinema_capture_runtime","")).startswith("checking")
              else "held",
