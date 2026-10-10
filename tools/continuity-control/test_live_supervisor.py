@@ -130,6 +130,52 @@ class SupervisorSafetyTests(TestCase):
                 self.assertIn("PLAYWRIGHT_MODULE",mod.ensure_capture_runtime(root))
                 execute.assert_not_called()
 
+    def test_preview_admits_only_private_owner_origin_main_base(self):
+        sha="a"*40
+        valid={"state":"open","merged_at":None,
+            "head":{"sha":sha,"ref":mod.CINEMA_PREVIEW_BRANCH,
+                    "repo":{"full_name":"YasmindIess/continuity-cinema"}},
+            "base":{"ref":"main",
+                    "repo":{"full_name":"YasmindIess/continuity-cinema"}}}
+        self.assertEqual(mod.admitted_preview_head(valid),sha)
+        fork={**valid,"head":{**valid["head"],"repo":{"full_name":"other/fork"}}}
+        with self.assertRaisesRegex(RuntimeError,"foreign or fork"):
+            mod.admitted_preview_head(fork)
+        wrong={**valid,"head":{**valid["head"],"sha":"not-a-real-sha"}}
+        with self.assertRaisesRegex(RuntimeError,"valid full head SHA"):
+            mod.admitted_preview_head(wrong)
+        closed={**valid,"state":"closed"}
+        with self.assertRaisesRegex(RuntimeError,"closed or merged"):
+            mod.admitted_preview_head(closed)
+        redirected={**valid,"base":{"ref":"feature","repo":{"full_name":"YasmindIess/continuity-cinema"}}}
+        with self.assertRaisesRegex(RuntimeError,"preview branch or base"):
+            mod.admitted_preview_head(redirected)
+
+    def test_preview_fetch_never_precedes_exact_head_ci(self):
+        # A missing / non-green exact-head CI must be held before Git or npm mutation.
+        with TemporaryDirectory() as td:
+            main=Path(td)/"cinema-main"
+            (main/".git").mkdir(parents=True)
+            calls=[]
+            def fake_run(cmd,cwd,timeout=35):
+                calls.append(cmd)
+                if cmd[1:4]==["remote","get-url","origin"]:
+                    return "https://github.com/YasmindIess/continuity-cinema.git"
+                if cmd[1:3]==["branch","--show-current"]:
+                    return "main"
+                if cmd[1:3]==["status","--porcelain"]:
+                    return ""
+                if cmd[:2]==["gh","api"]:
+                    return '{"state":"open","merged_at":null,"head":{"sha":"'+("a"*40)+'","ref":"'+mod.CINEMA_PREVIEW_BRANCH+'","repo":{"full_name":"YasmindIess/continuity-cinema"}},"base":{"ref":"main","repo":{"full_name":"YasmindIess/continuity-cinema"}}}'
+                raise AssertionError("unexpected side effect before CI: "+str(cmd))
+            with patch.object(mod,"MANAGED_CINEMA",main), \
+                 patch.object(mod,"run",side_effect=fake_run), \
+                 patch.object(mod,"exact_ci",side_effect=RuntimeError("CI not green")):
+                with self.assertRaisesRegex(RuntimeError,"CI not green"):
+                    mod.prepare_cinema_preview()
+            self.assertTrue(any(cmd[:2]==["gh","api"] for cmd in calls))
+            self.assertFalse(any("fetch" in cmd or "npm" in cmd for cmd in calls))
+
     def test_missing_exact_head_ci_fails_closed(self):
         with patch.object(mod.shutil, "which", return_value="/usr/bin/gh"), \
              patch.object(mod, "run", return_value='{"workflow_runs": []}'):
