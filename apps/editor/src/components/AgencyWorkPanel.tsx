@@ -1,5 +1,6 @@
 import {useState, type ChangeEvent} from "react";
 import {decodeAgencyProjection} from "../model/agency-projection.mjs";
+import {compareAgencyProjections, type AgencyTransition} from "../model/agency-transition.mjs";
 
 type AgencyTask = {
   id:string;title:string;status:string;priority:number;cost_units:number;
@@ -25,6 +26,8 @@ const statuses:Record<string,string>={
 };
 export function AgencyWorkPanel(){
  const [report,setReport]=useState<AgencyReport|null>(null);
+ const [baseline,setBaseline]=useState<AgencyReport|null>(null);
+ const [transition,setTransition]=useState<AgencyTransition|null>(null);
  const [error,setError]=useState<string|null>(null);
  async function onChoose(event:ChangeEvent<HTMLInputElement>){
   const file=event.target.files?.[0];event.target.value="";
@@ -32,8 +35,10 @@ export function AgencyWorkPanel(){
   setReport(null);setError(null);
   try{
    if(file.size===0||file.size>500000)throw Error("Agency evidence must be within 500 kB.");
-   const decoded=await decodeAgencyProjection(await file.text());
-   setReport(decoded as AgencyReport);
+   const decoded=await decodeAgencyProjection(await file.text()) as AgencyReport;
+   const next=baseline===null?null:compareAgencyProjections(baseline,decoded);
+   setTransition(next);
+   setReport(decoded);
   }catch(e){setError(e instanceof Error?e.message:"Agency evidence import held");}
  }
  return (
@@ -47,6 +52,25 @@ export function AgencyWorkPanel(){
    <label htmlFor="agency-projection-file">Import NICE-ROBIN agency JSON</label>
    <input id="agency-projection-file" type="file" accept=".json,application/json" onChange={e=>{void onChoose(e)}}/>
    {error&&<p className="continuity-error" role="alert">{error}</p>}
+   {report&&(
+    <div className="agency-work-meta">
+     <button type="button" onClick={()=>{
+      setBaseline(report);setTransition(null);
+     }}>Pin this source revision as comparison baseline</button>
+     {baseline&&<small>Baseline {baseline.source.head.slice(0,12)} · import a later source report to compare</small>}
+    </div>
+   )}
+   {transition&&(
+    <div className="agency-work-meta" role="status" aria-label="Source revision and task transition">
+     <strong>Work transition: {transition.state==="different_reported_source_revision"?"Different source revision":"Same revision, no new source progress"}</strong>
+     <small>Old {transition.old_source_head.slice(0,12)} → new {transition.new_source_head.slice(0,12)}</small>
+     <small>Tasks no longer projected: {transition.retired_task_candidates.length}. This does not prove task completion.</small>
+     {transition.retired_task_candidates.map(t=><small key={t.task_id}>No longer projected: {t.title}</small>)}
+     <small>New tasks: {transition.introduced_task_candidates.length} · Changed statuses: {transition.changed_task_statuses.length}</small>
+     <small>Next proposed coding task: {transition.current_next_development_task_id??"None proposed"}</small>
+     <small>Source execution, CI and independent witnessing are NOT established by comparing reports.</small>
+    </div>
+   )}
    {report&&(
     <div className="agency-work-body">
      <div className="agency-work-meta">
