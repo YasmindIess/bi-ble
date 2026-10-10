@@ -108,6 +108,31 @@ def synchronize(name, repo, directory, branch):
         report["reason"] = str(exc)[:200]
     return report
 
+def observed_cinema_build():
+    """Observe the HTTP server actually serving port 8765, not the proposed code."""
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8765/api/build", timeout=1.7) as response:
+            data=json.load(response)
+        if data.get("schema")!="cinema-live-build-v1" or data.get("userscript_served") is not True:
+            return {"state":"unverified","reason":"unexpected build identity schema"}
+        mode=data.get("source_mode")
+        head=data.get("source_commit")
+        if mode not in ("github-preview","github-main","legacy"):
+            return {"state":"unverified","reason":"unknown source mode"}
+        if mode in ("github-preview","github-main") and not (isinstance(head,str) and re.fullmatch(r"[0-9a-f]{40}",head)):
+            return {"state":"unverified","reason":"GitHub build lacks pinned commit"}
+        return {"state":"verified","source_mode":mode,"source_commit":head,
+                "version":str(data.get("version") or "unknown")[:28],
+                "userscript_served":True}
+    except urllib.error.HTTPError as exc:
+        if exc.code==404:
+            return {"state":"legacy-route-missing","source_mode":"legacy",
+                    "reason":"running Cinema HTTP server does not expose /api/build"}
+        return {"state":"unverified","reason":"HTTP "+str(exc.code)}
+    except (OSError, ValueError, TypeError):
+        return {"state":"unavailable","reason":"Cinema local HTTP build check unavailable"}
+
+
 def busy_capture():
     """Preserve both operator-loop and direct/manual Cinema captures.
 
@@ -492,7 +517,10 @@ def main():
             cinema_env = ({
                 "CINEMA_CAPTURES_DIR": str(CINEMA / "captures"),
                 "PLAYWRIGHT_MODULE": "",
-                "CINEMA_LOOP_REQUIRE_CI": "1"
+                "CINEMA_LOOP_REQUIRE_CI": "1",
+                "CINEMA_SOURCE_MODE": desired_mode,
+                "CINEMA_SOURCE_SHA": (managed.get("head") if managed_ready
+                                      else preview_admitted["head"] if preview_ready else "")
             } if managed_ready or preview_ready else {})
             if managed_ready:
                 capture_runtime="ready: managed CI-admitted checkout"
@@ -542,6 +570,13 @@ def main():
                     else:
                         vite = start("vite", ["pnpm", "editor:web"], BIBLE, 5173)
                     log(f"{name}: restarted after verified source update")
+            actual_build=observed_cinema_build()
+            expected_head=(managed.get("head") if managed_ready else preview_admitted["head"] if preview_ready else None)
+            attested_source=(actual_build.get("source_mode")==desired_mode and
+                             actual_build.get("source_commit")==expected_head and
+                             actual_build.get("state")=="verified")
+            if not attested_source and desired_mode=="legacy":
+                attested_source=(actual_build.get("state")=="legacy-route-missing")
             write_status({"schema": "blochfield-live-conductor-v1", "checked_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "runtime_marker": "github-self-update-smoke-v1", "supervisor_pid": os.getpid(),
                 "service_pids": {n: (p.pid if p.poll() is None else None)
@@ -553,12 +588,14 @@ def main():
                     (CI_RUNNER / name).is_file()
                     for name in ("run.sh", "run-helper.sh.template", "safe_sleep.sh")),
                 "repos": [*repos, control, managed], "cinema": cinema, "vite": vite,
-                "cinema_source": active_cinema_mode,
+                "cinema_source": desired_mode if attested_source else "unverified",
+                "cinema_live_build": actual_build,
+                "cinema_expected_source": desired_mode,
                 "cinema_preview": {
                     "state": "ready" if preview_ready else "checking" if preview_future is not None else "held",
                     "head": preview_admitted["head"] if preview_admitted else None,
                     "reason": preview_hold, "pr": CINEMA_PREVIEW_PR,
-                    "locally_admitted": active_cinema_mode=="github-preview"
+                    "locally_admitted": desired_mode=="github-preview" and attested_source
                 },
                 "cinema_managed_branch": CINEMA_BRANCH if active_cinema_mode=="github-main" else CINEMA_PREVIEW_BRANCH if active_cinema_mode=="github-preview" else None,
                 "unmerged": True,
