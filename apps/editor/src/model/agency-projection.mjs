@@ -47,6 +47,13 @@ export async function decodeAgencyProjection(jsonText){
  need(value.selected_task_id===null||
   (seen.has(value.selected_task_id)&&value.tasks.some(t=>t.id===value.selected_task_id&&t.status==="ready")),
   "selected task has no ready projection");
+ if(Object.hasOwn(value,"next_development_task_id")){
+  const queue=value.tasks.filter(t=>t.status==="needs_authorized_coding_agent")
+   .sort((a,b)=>b.priority-a.priority||a.id.localeCompare(b.id));
+  const expected=queue.length?queue[0].id:null;
+  need(value.next_development_task_id===expected,
+   "next development task does not match prioritized source blockers");
+ }
  const execution=value.execution||{};
  need(modes.has(execution.status)&&
   execution.source_tree_sha256===source.source_tree_sha256&&
