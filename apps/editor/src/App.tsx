@@ -37,6 +37,7 @@ import {
 } from "./components/CompilerPanel";
 
 import { ContinuityPanel } from "./components/ContinuityPanel";
+import { AgencyWorkPanel } from "./components/AgencyWorkPanel";
 import { decodeWorkerArtifact, verifyReceipt, reconcileTaskStates, type WorkerReceipt, type ReceiptObservation } from "./model/receipt-reconcile.mjs";
 import { exportContinuityHandoff, type ContinuityHandoff } from "./model/continuity-export.mjs";
 
@@ -1094,6 +1095,7 @@ function App() {
             observations={receiptObservations}
             storedCount={workerArtifacts.length}
           />
+          <AgencyWorkPanel />
         </aside>
 
         <section className="bottom-dock">
