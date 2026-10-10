@@ -1,6 +1,7 @@
 """Offline regression checks for the third-terminal supervisor."""
 import importlib.util
 import io
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase, main
