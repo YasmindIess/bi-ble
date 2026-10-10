@@ -5,6 +5,7 @@ itself is serving an older release. No code execution, secrets, repo writes,
 production authority, or remote networking is exposed.
 """
 import json
+import hashlib
 import re
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -107,18 +108,25 @@ def verified_userscript(status_path, script_root):
     """Only expose the one pinned CI-admitted userscript, never arbitrary files."""
     manifest = read_status(status_path.with_name("userscript.json"))
     head = manifest.get("head")
+    digest = manifest.get("content_sha256")
     if (manifest.get("schema") != "bxr-ci-admitted-userscript-v1"
         or manifest.get("ci_admitted") is not True
-        or not isinstance(head, str) or not SHA.fullmatch(head)):
+        or not isinstance(head, str) or not SHA.fullmatch(head)
+        or not isinstance(digest, str) or not SHA.fullmatch(digest)):
         return None
-    candidate = script_root / head / "userscripts" / "continuity-cinema-bridge.user.js"
+    project = script_root / head
+    scripts = project / "userscripts"
+    candidate = scripts / "continuity-cinema-bridge.user.js"
     try:
-        if candidate.is_symlink() or not candidate.is_file():
+        if (script_root.is_symlink() or project.is_symlink()
+            or scripts.is_symlink() or candidate.is_symlink()
+            or not candidate.is_file()):
             return None
         if candidate.stat().st_size > 220000:
             return None
         data = candidate.read_bytes()
-        if not data.startswith(b"// ==UserScript=="):
+        if (not data.startswith(b"// ==UserScript==")
+            or hashlib.sha256(data).hexdigest() != digest):
             return None
         return data
     except OSError:
