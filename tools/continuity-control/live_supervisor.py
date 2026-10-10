@@ -108,6 +108,21 @@ def synchronize(name, repo, directory, branch):
         report["reason"] = str(exc)[:200]
     return report
 
+def cinema_revision_changed(current_mode, current_head, target_mode, target_head):
+    """A green-CI preview head changing is a runtime update, even within one mode.
+
+    This comparison is advisory for a restart request only. Existing safety
+    guards still prevent interruption of active captures or external servers.
+    """
+    if current_mode != target_mode:
+        return True
+    if target_mode in ("github-main", "github-preview"):
+        if not isinstance(target_head, str) or not re.fullmatch(r"[0-9a-f]{40}", target_head):
+            return False  # no admissible revision; never guess a source head
+        return current_head != target_head
+    return False
+
+
 def observed_cinema_build():
     """Observe the HTTP server actually serving port 8765, not the proposed code."""
     try:
@@ -536,6 +551,7 @@ def main():
     preview_hold=None
     preview_checked_at=0.0
     active_cinema_mode="legacy"
+    active_cinema_head=None
     try:
         while not STOP:
             repos = [synchronize(*p) for p in REPOS]
@@ -582,7 +598,10 @@ def main():
             pending["cinema"] |= any(r["state"] == "updated" for r in repos)
             preview_ready=not managed_ready and preview_admitted is not None
             desired_mode="github-main" if managed_ready else "github-preview" if preview_ready else "legacy"
-            pending["cinema"] |= managed["state"] == "updated" or desired_mode != active_cinema_mode
+            desired_head=(managed.get("head") if managed_ready else
+                          preview_admitted["head"] if preview_ready else None)
+            pending["cinema"] |= managed["state"] == "updated" or cinema_revision_changed(
+                active_cinema_mode, active_cinema_head, desired_mode, desired_head)
             cinema_dir = (MANAGED_CINEMA if managed_ready else
                           Path(preview_admitted["path"]) if preview_ready else CINEMA)
             cinema_env = ({
@@ -620,6 +639,7 @@ def main():
             if cinema == "started":
                 cinema_managed = managed_ready or preview_ready
                 active_cinema_mode=desired_mode
+                active_cinema_head=desired_head
             vite = start("vite", ["pnpm", "editor:web"], BIBLE, 5173) if shutil.which("pnpm") else "pnpm unavailable"
             for name in ("cinema", "vite"):
                 if not pending[name]:
@@ -638,6 +658,7 @@ def main():
                         if cinema == "started":
                             cinema_managed = managed_ready or preview_ready
                             active_cinema_mode=desired_mode
+                            active_cinema_head=desired_head
                     else:
                         vite = start("vite", ["pnpm", "editor:web"], BIBLE, 5173)
                     log(f"{name}: restarted after verified source update")
@@ -648,7 +669,7 @@ def main():
                 "capture_preflight_running": capture_future is not None and not capture_future.done(),
                 "preview_preflight_running": preview_future is not None and not preview_future.done(),
             }
-            expected_head=(managed.get("head") if managed_ready else preview_admitted["head"] if preview_ready else None)
+            expected_head=desired_head
             attested_source=(actual_build.get("source_mode")==desired_mode and
                              actual_build.get("source_commit")==expected_head and
                              actual_build.get("state")=="verified")
@@ -670,6 +691,11 @@ def main():
                 "cinema_source": desired_mode if attested_source else "unverified",
                 "cinema_live_build": actual_build,
                 "cinema_expected_source": desired_mode,
+                "cinema_expected_head": expected_head,
+                "cinema_active_head": actual_build.get("source_commit") if actual_build.get("state")=="verified" else None,
+                "cinema_revision_cutover_pending": bool(
+                    (desired_mode in ("github-main","github-preview"))
+                    and (not attested_source or pending["cinema"])),
                 "cinema_preview": {
                     "state": "ready" if preview_ready else "checking" if preview_future is not None else "held",
                     "head": preview_admitted["head"] if preview_admitted else None,
