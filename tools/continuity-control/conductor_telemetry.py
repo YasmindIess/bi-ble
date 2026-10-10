@@ -103,15 +103,46 @@ def snapshot(status, clock=None):
     }
 
 
-def handler_for(status_path):
+def verified_userscript(status_path, script_root):
+    """Only expose the one pinned CI-admitted userscript, never arbitrary files."""
+    manifest = read_status(status_path.with_name("userscript.json"))
+    head = manifest.get("head")
+    if (manifest.get("schema") != "bxr-ci-admitted-userscript-v1"
+        or manifest.get("ci_admitted") is not True
+        or not isinstance(head, str) or not SHA.fullmatch(head)):
+        return None
+    candidate = script_root / head / "userscripts" / "continuity-cinema-bridge.user.js"
+    try:
+        if candidate.is_symlink() or not candidate.is_file():
+            return None
+        if candidate.stat().st_size > 220000:
+            return None
+        data = candidate.read_bytes()
+        if not data.startswith(b"// ==UserScript=="):
+            return None
+        return data
+    except OSError:
+        return None
+
+
+def handler_for(status_path, script_root):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             target = urlsplit(self.path)
-            if target.path != "/api/observatory" or target.query:
+            if target.query:
                 return self.send_error(404, "route not found")
-            body = json.dumps(snapshot(read_status(status_path)), separators=(",", ":")).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
+            if target.path == "/userscripts/continuity-cinema-bridge.user.js":
+                body = verified_userscript(status_path, script_root)
+                if body is None:
+                    return self.send_error(404, "No CI-admitted userscript available")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/javascript; charset=utf-8")
+            elif target.path == "/api/observatory":
+                body = json.dumps(snapshot(read_status(status_path)), separators=(",", ":")).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+            else:
+                return self.send_error(404, "route not found")
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Content-Length", str(len(body)))
@@ -126,8 +157,11 @@ def handler_for(status_path):
     return Handler
 
 
-def start(status_path, port=PORT):
-    server = ThreadingHTTPServer(("127.0.0.1", port), handler_for(Path(status_path)))
+def start(status_path, port=PORT, script_root=None):
+    if script_root is None:
+        script_root = Path.home() / ".local/share/blochfield-cinema/previews"
+    server = ThreadingHTTPServer(("127.0.0.1", port),
+                                 handler_for(Path(status_path), Path(script_root)))
     server.daemon_threads = True
     Thread(target=server.serve_forever, name="bxr-conductor-observation", daemon=True).start()
     return server
