@@ -434,6 +434,12 @@ def main():
     last_capture_check=0.0
     capture_executor=ThreadPoolExecutor(max_workers=1,thread_name_prefix="cinema-capture-preflight")
     capture_future=None
+    preview_executor=ThreadPoolExecutor(max_workers=1,thread_name_prefix="cinema-git-preview")
+    preview_future=None
+    preview_admitted=None
+    preview_hold=None
+    preview_checked_at=0.0
+    active_cinema_mode="legacy"
     try:
         while not STOP:
             repos = [synchronize(*p) for p in REPOS]
@@ -458,6 +464,18 @@ def main():
                         managed_ready = True
                     except Exception as exc:
                         managed.update({"state": "held", "reason": "Cinema CI/runtime prerequisite: " + str(exc)[:150]})
+            if preview_future is not None:
+                if preview_future.done():
+                    try:
+                        preview_admitted=preview_future.result()
+                        preview_hold=None
+                    except Exception as exc:
+                        preview_hold=str(exc)[:200]
+                    preview_future=None
+                    preview_checked_at=time.monotonic()
+            elif not managed_ready and time.monotonic()-preview_checked_at > 90:
+                preview_future=preview_executor.submit(prepare_cinema_preview)
+                preview_checked_at=time.monotonic()
             ci_runner=start_ci_runner()
             runner_connection=runner_remote_status()
             for r in [*repos, control, managed]:
@@ -466,11 +484,20 @@ def main():
                     log(r["name"] + ": " + message)
                     prior_messages[r["name"]]=message
             pending["cinema"] |= any(r["state"] == "updated" for r in repos)
-            pending["cinema"] |= managed["state"] == "updated" or (managed_ready != cinema_managed)
-            cinema_dir = MANAGED_CINEMA if managed_ready else CINEMA
-            cinema_env = {"CINEMA_CAPTURES_DIR": str(CINEMA / "captures")} if managed_ready else {}
+            preview_ready=not managed_ready and preview_admitted is not None
+            desired_mode="github-main" if managed_ready else "github-preview" if preview_ready else "legacy"
+            pending["cinema"] |= managed["state"] == "updated" or desired_mode != active_cinema_mode
+            cinema_dir = (MANAGED_CINEMA if managed_ready else
+                          Path(preview_admitted["path"]) if preview_ready else CINEMA)
+            cinema_env = ({
+                "CINEMA_CAPTURES_DIR": str(CINEMA / "captures"),
+                "PLAYWRIGHT_MODULE": "",
+                "CINEMA_LOOP_REQUIRE_CI": "1"
+            } if managed_ready or preview_ready else {})
             if managed_ready:
                 capture_runtime="ready: managed CI-admitted checkout"
+            elif preview_ready:
+                capture_runtime="ready: pinned green-CI unmerged local preview"
             elif capture_future is not None:
                 if capture_future.done():
                     try:
@@ -492,7 +519,8 @@ def main():
             pending["vite"] |= repos[0]["state"] == "updated"
             cinema = start("cinema", ["bash", "./run-local.sh"], cinema_dir, 8765, cinema_env)
             if cinema == "started":
-                cinema_managed = managed_ready
+                cinema_managed = managed_ready or preview_ready
+                active_cinema_mode=desired_mode
             vite = start("vite", ["pnpm", "editor:web"], BIBLE, 5173) if shutil.which("pnpm") else "pnpm unavailable"
             for name in ("cinema", "vite"):
                 if not pending[name]:
@@ -509,7 +537,8 @@ def main():
                     if name == "cinema":
                         cinema = start("cinema", ["bash", "./run-local.sh"], cinema_dir, 8765, cinema_env)
                         if cinema == "started":
-                            cinema_managed = managed_ready
+                            cinema_managed = managed_ready or preview_ready
+                            active_cinema_mode=desired_mode
                     else:
                         vite = start("vite", ["pnpm", "editor:web"], BIBLE, 5173)
                     log(f"{name}: restarted after verified source update")
@@ -524,12 +553,21 @@ def main():
                     (CI_RUNNER / name).is_file()
                     for name in ("run.sh", "run-helper.sh.template", "safe_sleep.sh")),
                 "repos": [*repos, control, managed], "cinema": cinema, "vite": vite,
-                "cinema_source": "github" if cinema_managed else "legacy",
-                "cinema_managed_branch": CINEMA_BRANCH if cinema_managed else None, "unmerged": True,
+                "cinema_source": active_cinema_mode,
+                "cinema_preview": {
+                    "state": "ready" if preview_ready else "checking" if preview_future is not None else "held",
+                    "head": preview_admitted["head"] if preview_admitted else None,
+                    "reason": preview_hold, "pr": CINEMA_PREVIEW_PR,
+                    "locally_admitted": active_cinema_mode=="github-preview"
+                },
+                "cinema_managed_branch": CINEMA_BRANCH if active_cinema_mode=="github-main" else CINEMA_PREVIEW_BRANCH if active_cinema_mode=="github-preview" else None,
+                "unmerged": True,
                 "release_authorized": False, "production_deployed": False})
             self_update_pending |= control['state'] == 'updated'
             if self_update_pending:
-                if busy_capture() or cinema_runner_busy() or (capture_future is not None and not capture_future.done()):
+                if (busy_capture() or cinema_runner_busy()
+                    or (capture_future is not None and not capture_future.done())
+                    or (preview_future is not None and not preview_future.done())):
                     log('Supervisor source updated: defer self-reexec during capture, CI, or browser provisioning')
                 else:
                     log('Supervisor source updated and CI-verified: restart supervised processes and re-exec')
@@ -541,6 +579,7 @@ def main():
                 time.sleep(1)
     finally:
         capture_executor.shutdown(wait=False,cancel_futures=True)
+        preview_executor.shutdown(wait=False,cancel_futures=True)
         for name in ("cinema", "vite", "cinema-runner"):
             stop_owned(name)
         log("Third runtime stopped; evidence and external services untouched")
