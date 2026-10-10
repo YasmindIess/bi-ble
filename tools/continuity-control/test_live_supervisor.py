@@ -247,6 +247,35 @@ class SupervisorSafetyTests(TestCase):
         self.assertEqual(result["state"],"legacy-route-missing")
         self.assertEqual(result["source_mode"],"legacy")
 
+    def test_preview_commit_rotation_requires_reload_even_with_same_mode(self):
+        a="a"*40
+        b="b"*40
+        f=mod.cinema_revision_changed
+        self.assertTrue(f("github-preview",a,"github-preview",b),
+                        "new CI-green revision must reload existing preview")
+        self.assertFalse(f("github-preview",a,"github-preview",a),
+                         "identical revision should not restart")
+        self.assertTrue(f("legacy",None,"github-preview",b))
+        self.assertTrue(f("github-preview",a,"github-main",b))
+        self.assertTrue(f("github-preview",a,"legacy",None))
+        self.assertFalse(f("legacy",None,"legacy",None))
+        self.assertFalse(f("github-preview",a,"github-preview",None),
+                         "invalid candidate cannot trigger a speculative restart")
+        self.assertFalse(f("github-preview",a,"github-preview","unverified"),
+                         "bad source identity never authorizes a cutover")
+
+    def test_source_revision_reload_keeps_active_capture_guard(self):
+        current="1"*40
+        updated="2"*40
+        self.assertTrue(mod.cinema_revision_changed(
+            "github-preview",current,"github-preview",updated))
+        # Revision change creates only a pending restart request. A real
+        # active capture continues to be protected by the existing busy gate.
+        with patch.object(mod,"busy_capture",return_value=True):
+            self.assertTrue(mod.busy_capture())
+        with patch.object(mod,"busy_capture",return_value=False):
+            self.assertFalse(mod.busy_capture())
+
     def test_missing_exact_head_ci_fails_closed(self):
         with patch.object(mod.shutil, "which", return_value="/usr/bin/gh"), \
              patch.object(mod, "run", return_value='{"workflow_runs": []}'):
