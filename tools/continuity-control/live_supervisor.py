@@ -450,7 +450,14 @@ def main():
     signal.signal(signal.SIGINT, halt)
     signal.signal(signal.SIGTERM, halt)
     log("Blochfield third runtime active: clean fast-forward + exact-head CI + local reload")
-    log("External processes are never killed. Stop the old Cinema once to transfer ownership.")
+    # Standalone read-only observatory: available even when Cinema is running old code.
+    telemetry_server=None
+    try:
+        from conductor_telemetry import start as start_telemetry
+        telemetry_server=start_telemetry(STATE)
+        log("β×R direct observation ready at 127.0.0.1:8767 (read-only)")
+    except (ImportError, OSError) as exc:
+        log("β×R direct observation held: "+str(exc)[:120])
     pending = {"cinema": False, "vite": False}
     self_update_pending = False
     cinema_managed = False
@@ -615,6 +622,9 @@ def main():
                     break
                 time.sleep(1)
     finally:
+        if telemetry_server is not None:
+            telemetry_server.shutdown()
+            telemetry_server.server_close()
         capture_executor.shutdown(wait=False,cancel_futures=True)
         preview_executor.shutdown(wait=False,cancel_futures=True)
         for name in ("cinema", "vite", "cinema-runner"):
