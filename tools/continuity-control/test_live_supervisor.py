@@ -81,6 +81,55 @@ class SupervisorSafetyTests(TestCase):
             with patch.object(mod, "CI_RUNNER", root), patch.object(mod, "run", side_effect=RuntimeError("offline API")):
                 self.assertEqual(mod.runner_remote_status()["state"], "unverified")
 
+    def test_capture_dependency_ready_never_installs(self):
+        with TemporaryDirectory() as temp:
+            root=Path(temp)
+            (root / "cycle-browser.mjs").write_text("fixture")
+            with patch.object(mod.shutil,"which",return_value="/usr/bin/thing"), \
+                 patch.object(mod,"busy_capture",return_value=False), \
+                 patch.object(mod,"run",return_value="") as execute:
+                self.assertEqual(mod.ensure_capture_runtime(root),"ready")
+            self.assertEqual(execute.call_count,1)
+            self.assertEqual(execute.call_args.args[0][0],"node")
+
+    def test_capture_dependency_installs_only_pinned_no_save_package(self):
+        with TemporaryDirectory() as temp:
+            root=Path(temp)
+            (root / "cycle-browser.mjs").write_text("fixture")
+            seen=[]
+            def execution(args,cwd,timeout=35):
+                seen.append(args)
+                if len(seen)<=2:
+                    raise RuntimeError("ERR_MODULE_NOT_FOUND")
+                return ""
+            with patch.object(mod.shutil,"which",return_value="/usr/bin/thing"), \
+                 patch.object(mod,"busy_capture",return_value=False), \
+                 patch.object(mod,"run",side_effect=execution):
+                self.assertEqual(mod.ensure_capture_runtime(root),"ready")
+            self.assertEqual(len(seen),5)
+            self.assertEqual(seen[2][:2],["npm","install"])
+            self.assertIn("playwright@1.56.1",seen[2])
+            self.assertIn("--no-save",seen[2])
+            self.assertIn("--ignore-scripts",seen[2])
+            self.assertEqual(seen[3][:3],["npx","--no-install","playwright"])
+
+    def test_capture_provisioning_defers_during_actual_recording(self):
+        with TemporaryDirectory() as temp:
+            root=Path(temp)
+            (root / "cycle-browser.mjs").write_text("fixture")
+            with patch.object(mod,"busy_capture",return_value=True),patch.object(mod,"run") as execute:
+                self.assertIn("deferred",mod.ensure_capture_runtime(root))
+                execute.assert_not_called()
+
+    def test_nonexistent_playwright_module_configuration_is_not_ignored(self):
+        with TemporaryDirectory() as temp:
+            root=Path(temp)
+            (root / "cycle-browser.mjs").write_text("fixture")
+            with patch.dict(mod.os.environ,{"PLAYWRIGHT_MODULE":str(root/"not-here.mjs")}), \
+                 patch.object(mod,"run") as execute:
+                self.assertIn("PLAYWRIGHT_MODULE",mod.ensure_capture_runtime(root))
+                execute.assert_not_called()
+
     def test_missing_exact_head_ci_fails_closed(self):
         with patch.object(mod.shutil, "which", return_value="/usr/bin/gh"), \
              patch.object(mod, "run", return_value='{"workflow_runs": []}'):
