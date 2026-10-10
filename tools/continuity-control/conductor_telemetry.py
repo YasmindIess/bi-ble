@@ -19,6 +19,7 @@ NAMES = frozenset(("bi-ble", "nice-robin", "conductor", "cinema"))
 STATES = frozenset(("current", "updated", "held", "not_adopted", "unknown"))
 MODES = frozenset(("github-preview", "github-main", "legacy"))
 SHA = re.compile(r"^[a-f0-9]{40}$")
+SHA256 = re.compile(r"^[a-f0-9]{64}$")
 
 
 def brief(value, limit=180):
@@ -112,7 +113,7 @@ def verified_userscript(status_path, script_root):
     if (manifest.get("schema") != "bxr-ci-admitted-userscript-v1"
         or manifest.get("ci_admitted") is not True
         or not isinstance(head, str) or not SHA.fullmatch(head)
-        or not isinstance(digest, str) or not SHA.fullmatch(digest)):
+        or not isinstance(digest, str) or not SHA256.fullmatch(digest)):
         return None
     project = script_root / head
     scripts = project / "userscripts"
