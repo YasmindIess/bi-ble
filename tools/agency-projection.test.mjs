@@ -29,6 +29,7 @@ function fixture(){
     execution_authorized:false}
   ],
   selected_task_id:null,
+  next_development_task_id:"restore-release-input-1",
   execution:{task_id:"python-ast-check",status:"local_static_check_passed",
    source_tree_sha256:"b".repeat(64),scope:"local_static_parse_only",
    no_repository_mutation:true,independent_witness:false,release_authorized:false,
@@ -64,4 +65,19 @@ test("non-executed and previously checked revisions retain distinct statuses",as
  assert.equal(output.execution.status,"unchanged_prior_local_result");
  const forged={...previous,selected_task_id:"restore-release-input-1"};
  await assert.rejects(async()=>decodeAgencyProjection(await encode(forged)),/selected task/);
+});
+
+test("next coding candidate is provenance-bound and never an execution permission",async()=>{
+ const sample=fixture();
+ const value=await decodeAgencyProjection(await encode(sample));
+ assert.equal(value.next_development_task_id,"restore-release-input-1");
+ await assert.rejects(()=>decodeAgencyProjection(await encode({
+  ...sample,next_development_task_id:"python-ast-check"
+ })),/next development task/);
+ await assert.rejects(()=>decodeAgencyProjection(await encode({
+  ...sample,next_development_task_id:null
+ })),/next development task/);
+ const none={...sample,next_development_task_id:null,
+  tasks:sample.tasks.filter(t=>t.id!=="restore-release-input-1")};
+ assert.equal((await decodeAgencyProjection(await encode(none))).next_development_task_id,null);
 });
