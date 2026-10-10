@@ -50,9 +50,9 @@ test("tampered receipt or authority claims fail closed",async()=>{
  const sample=fixture();
  const raw=await encode(sample);
  await assert.rejects(()=>decodeAgencyProjection(raw.replace("observed_local_check","ready")),/digest mismatch/);
- await assert.rejects(()=>decodeAgencyProjection(await encode({...sample,release_authorized:true})),/authority elevation/);
- await assert.rejects(()=>decodeAgencyProjection(await encode({...sample,coding_agent_invoked:true})),/authority elevation/);
- await assert.rejects(()=>decodeAgencyProjection(await encode({
+ await assert.rejects(async()=>decodeAgencyProjection(await encode({...sample,release_authorized:true})),/authority elevation/);
+ await assert.rejects(async()=>decodeAgencyProjection(await encode({...sample,coding_agent_invoked:true})),/authority elevation/);
+ await assert.rejects(async()=>decodeAgencyProjection(await encode({
   ...sample,tasks:[sample.tasks[0],{...sample.tasks[0]}]
  })),/duplicate or invalid task/);
 });
@@ -63,5 +63,5 @@ test("non-executed and previously checked revisions retain distinct statuses",as
  const output=await decodeAgencyProjection(await encode(previous));
  assert.equal(output.execution.status,"unchanged_prior_local_result");
  const forged={...previous,selected_task_id:"restore-release-input-1"};
- await assert.rejects(()=>decodeAgencyProjection(await encode(forged)),/selected task/);
+ await assert.rejects(async()=>decodeAgencyProjection(await encode(forged)),/selected task/);
 });
