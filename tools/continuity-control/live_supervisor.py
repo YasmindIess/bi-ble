@@ -396,13 +396,13 @@ def runner_remote_status():
         return {"state":"unverified","busy":None}
 
 
-def local_cinema_runner_worker_active():
+def local_cinema_runner_worker_active(proc=None):
     """Inspect this runner's *own* Worker binary, not arbitrary CI processes.
 
     False means an available Linux procfs scan found no matching worker.
     None means procfs was unreadable, so there is insufficient evidence.
     """
-    proc=Path("/proc")
+    proc=Path("/proc") if proc is None else Path(proc)
     if not proc.is_dir():
         return None
     expected=CI_RUNNER / "bin" / "Runner.Worker"
@@ -419,6 +419,20 @@ def local_cinema_runner_worker_active():
                 continue
             if executable == canonical:
                 return True
+            # Some runner distributions launch a .NET host instead of the apphost.
+            # Match only a Worker argv whose path resolves *inside this runner*.
+            try:
+                raw=(entry / "cmdline").read_bytes().split(b"\\x00")
+                argv=raw[0].decode("utf-8",errors="replace") if raw else ""
+                if Path(argv).name != "Runner.Worker":
+                    continue
+                target=Path(argv)
+                if not target.is_absolute():
+                    target=(entry / "cwd").resolve(strict=True) / target
+                if target.resolve(strict=True)==canonical:
+                    return True
+            except (OSError, ValueError, PermissionError):
+                continue
         return False
     except (OSError, PermissionError):
         return None
