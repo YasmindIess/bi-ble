@@ -3,6 +3,7 @@
 import json
 import os
 import hashlib
+import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import shutil
@@ -19,6 +20,9 @@ MANAGED_CINEMA = Path(os.environ.get("CINEMA_GIT_DIR", HOME / ".local/share/bloc
 CINEMA_REPO = "YasmindIess/continuity-cinema"
 CI_RUNNER = HOME / ".local/share/blochfield-cinema-runner"
 CINEMA_BRANCH = "main"
+CINEMA_PREVIEW_BRANCH = "feat/living-bxr-observatory-v1"
+CINEMA_PREVIEW_PR = 1
+CINEMA_RELEASES = HOME / ".local/share/blochfield-cinema/previews"
 BIBLE = Path(os.environ.get("BIBLE_REPO_DIR", HOME / "bi-ble-cinema")).expanduser()
 ROBIN = Path(os.environ.get("ROBIN_REPO_DIR", HOME / "nice-robin-cinema")).expanduser()
 REPOS = [
@@ -185,6 +189,81 @@ def repair_runner_launch_files():
             destination.chmod(item.stat().st_mode & 0o777)
         return None
     return "no matching trusted runner distribution; helper repair held"
+
+
+def admitted_preview_head(pr):
+    """Only a currently open, owner-originated Cinema PR may become a local preview."""
+    if not isinstance(pr,dict) or pr.get("state")!="open" or pr.get("merged_at"):
+        raise RuntimeError("preview PR closed or merged; review required")
+    head=pr.get("head") or {}
+    base=pr.get("base") or {}
+    head_repo=(head.get("repo") or {}).get("full_name")
+    base_repo=(base.get("repo") or {}).get("full_name")
+    if head_repo!=CINEMA_REPO or base_repo!=CINEMA_REPO:
+        raise RuntimeError("foreign or fork-based preview is not admitted")
+    if head.get("ref")!=CINEMA_PREVIEW_BRANCH or base.get("ref")!="main":
+        raise RuntimeError("preview branch or base does not match pinned policy")
+    sha=head.get("sha")
+    if not isinstance(sha,str) or not re.fullmatch(r"[0-9a-f]{40}",sha):
+        raise RuntimeError("preview has no valid full head SHA")
+    return sha
+
+
+def prepare_cinema_preview():
+    """Build a separate immutable, CI-green localhost preview; never alter main.
+
+    This does not merge, upload, deploy, write contract state or touch captures.
+    Existing running previews retain their own immutable directories until the
+    next version is fully prepared.
+    """
+    if not (MANAGED_CINEMA / ".git").exists():
+        raise RuntimeError("Cinema main checkout is absent")
+    remote=run(["git","remote","get-url","origin"],MANAGED_CINEMA).removesuffix(".git").rstrip("/")
+    if remote not in (f"https://github.com/{CINEMA_REPO}",
+                     f"git@github.com:{CINEMA_REPO}",
+                     f"ssh://git@github.com/{CINEMA_REPO}"):
+        raise RuntimeError("Cinema origin differs from expected private repository")
+    if run(["git","branch","--show-current"],MANAGED_CINEMA)!="main":
+        raise RuntimeError("Cinema main checkout branch changed")
+    if run(["git","status","--porcelain","--untracked-files=normal"],MANAGED_CINEMA):
+        raise RuntimeError("Cinema main checkout is dirty; preserving user changes")
+    pr=json.loads(run(["gh","api",f"repos/{CINEMA_REPO}/pulls/{CINEMA_PREVIEW_PR}"],
+                      CONTROL,timeout=22))
+    sha=admitted_preview_head(pr)
+    exact_ci(CINEMA_REPO,sha,MANAGED_CINEMA)
+    run(["git","-c","credential.interactive=never","fetch","--quiet","--no-tags",
+         "origin",f"refs/heads/{CINEMA_PREVIEW_BRANCH}"],MANAGED_CINEMA,timeout=65)
+    fetched=run(["git","rev-parse","FETCH_HEAD"],MANAGED_CINEMA)
+    if fetched!=sha:
+        raise RuntimeError("remote preview head moved during CI verification")
+    main_sha=run(["git","rev-parse","refs/heads/main"],MANAGED_CINEMA)
+    run(["git","merge-base","--is-ancestor",main_sha,sha],MANAGED_CINEMA)
+    directory=CINEMA_RELEASES / sha
+    ready=directory / "node_modules/.cinema-browser-ready"
+    if directory.exists():
+        if directory.is_symlink() or not (directory / ".git").is_file():
+            raise RuntimeError("existing preview path is not a Git worktree")
+        if run(["git","rev-parse","HEAD"],directory)!=sha:
+            raise RuntimeError("existing preview checkout has different commit")
+        if run(["git","status","--porcelain","--untracked-files=normal"],directory):
+            raise RuntimeError("preview worktree dirty; refusing automated mutation")
+    else:
+        CINEMA_RELEASES.mkdir(parents=True,exist_ok=True)
+        run(["git","-c","core.hooksPath=/dev/null","worktree","add","--detach",
+             str(directory),sha],MANAGED_CINEMA,timeout=85)
+    if not ready.is_file() or ready.read_text(encoding="utf-8").strip()!=sha:
+        run(["npm","ci","--ignore-scripts","--no-audit","--no-fund"],
+            directory,timeout=220)
+        run(["npx","--no-install","playwright","install","chromium"],
+            directory,timeout=330)
+        test_script=("import {chromium} from 'playwright'; "
+                     "import fs from 'node:fs'; "
+                     "if(!fs.existsSync(chromium.executablePath()))process.exit(3)")
+        run(["node","--input-type=module","-e",test_script],
+            directory,timeout=18)
+        ready.write_text(sha+"\n",encoding="utf-8")
+    return {"path":str(directory),"head":sha,"state":"ready","ci":"verified",
+            "source":"unmerged-pr-local-preview"}
 
 
 def ensure_capture_runtime(directory):
