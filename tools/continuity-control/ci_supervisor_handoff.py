@@ -118,6 +118,10 @@ def state():
     if d.get("schema")!="blochfield-live-conductor-v1":raise Held("Unexpected supervisor status schema")
     if d.get("cinema") not in ("owned","started") or d.get("vite") not in ("owned","started"):
         raise Held("Supervisor does not own both local services")
+    guard=d.get("supervisor_restart_gate")
+    if not isinstance(guard,dict) or any(guard.get(k) is not False for k in
+        ("active_capture","runner_job_active","capture_preflight_running","preview_preflight_running")):
+        raise Held("Existing conductor has an active or unverified restart guard")
     return d
 
 def create_clean_parallel_checkout(sha):
@@ -178,6 +182,7 @@ def handoff(sha,apply):
     identity(pid)
     ensure_idle()
     if runner_busy():raise Held("Runner became active before handoff")
+    gh_gate(sha)  # Reject a changed PR head/CI gate at the last non-destructive boundary.
     carry=former_env(pid)
     logfile=ROOT/"handoff-supervisor.log"
     print("HANDOFF: gracefully retiring old supervisor; preserving source, captures and credentials")
