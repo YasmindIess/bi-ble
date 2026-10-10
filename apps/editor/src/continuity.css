@@ -40,3 +40,16 @@
 .continuity-import > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
 .continuity-import > label { display: block; margin-top: 9px; }
 .continuity-import input[type="file"] { font-size: 9px; min-width: 0; }
+
+/* Agency evidence stays inside the existing inspector; no dashboard overlay. */
+.agency-work-body{display:grid;gap:9px;min-width:0}
+.agency-work-meta{display:grid;gap:4px;min-width:0}
+.agency-work-tasks{display:grid;gap:7px;padding-left:18px;margin:0;min-width:0}
+.agency-task{padding:8px;border:1px solid var(--border);border-radius:8px;display:grid;gap:4px;min-width:0}
+.agency-task strong{font-size:10px;overflow-wrap:anywhere}
+.agency-task small{overflow-wrap:anywhere}
+.agency-observed_local_check,.agency-observed_previous_local_check{border-left:3px solid #367b55}
+.agency-ready{border-left:3px solid #65908e}
+.agency-blocked_by_source_errors{border-left:3px solid #a64b43}
+.agency-needs_authorized_coding_agent,.agency-deferred_not_admitted{border-left:3px solid #a57d37}
+.agency-work-body code{font-size:9px;overflow-wrap:anywhere}
