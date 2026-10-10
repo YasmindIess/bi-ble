@@ -50,10 +50,10 @@ class SupervisorSafetyTests(TestCase):
             (proc/"123").mkdir()
             (proc/"123"/"exe").symlink_to("/bin/true")
             (proc/"123"/"cwd").symlink_to(runner)
-            (proc/"123"/"cmdline").write_bytes(b"./bin/Runner.Worker\\x00")
+            (proc/"123"/"cmdline").write_bytes(b"./bin/Runner.Worker\x00")
             with patch.object(mod,"CI_RUNNER",runner):
                 self.assertIs(mod.local_cinema_runner_worker_active(proc),True)
-                (proc/"123"/"cmdline").write_bytes(b"/tmp/elsewhere/Runner.Worker\\x00")
+                (proc/"123"/"cmdline").write_bytes(b"/tmp/elsewhere/Runner.Worker\x00")
                 self.assertIs(mod.local_cinema_runner_worker_active(proc),False)
 
     def test_repair_missing_runner_helpers_without_touching_credentials(self):
