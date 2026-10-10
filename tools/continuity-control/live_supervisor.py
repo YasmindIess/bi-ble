@@ -291,7 +291,8 @@ def prepare_cinema_preview():
     manifest=STATE.with_name("userscript.json")
     temp=manifest.with_name(".userscript-"+str(os.getpid())+".tmp")
     temp.write_text(json.dumps({"schema":"bxr-ci-admitted-userscript-v1",
-        "ci_admitted":True,"head":sha,"branch":CINEMA_PREVIEW_BRANCH}),encoding="utf-8")
+        "ci_admitted":True,"head":sha,"branch":CINEMA_PREVIEW_BRANCH,
+        "content_sha256":hashlib.sha256(script.read_bytes()).hexdigest()}),encoding="utf-8")
     temp.chmod(0o600)
     temp.replace(manifest)
     if not ready.is_file() or ready.read_text(encoding="utf-8").strip()!=sha:
