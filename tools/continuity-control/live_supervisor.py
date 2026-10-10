@@ -265,8 +265,9 @@ def prepare_cinema_preview():
         raise RuntimeError("Cinema origin differs from expected private repository")
     if run(["git","branch","--show-current"],MANAGED_CINEMA)!="main":
         raise RuntimeError("Cinema main checkout branch changed")
-    if run(["git","status","--porcelain","--untracked-files=normal"],MANAGED_CINEMA):
-        raise RuntimeError("Cinema main checkout is dirty; preserving user changes")
+    # Detached Git worktrees do not alter the main checkout's working files.
+    # Preserve user edits instead of treating them as an update obstruction.
+    main_status_before=run(["git","status","--porcelain","--untracked-files=normal"],MANAGED_CINEMA)
     pr=json.loads(run(["gh","api",f"repos/{CINEMA_REPO}/pulls/{CINEMA_PREVIEW_PR}"],
                       CONTROL,timeout=22))
     sha=admitted_preview_head(pr)
@@ -321,6 +322,8 @@ def prepare_cinema_preview():
         run(["node","--input-type=module","-e",test_script],
             directory,timeout=18)
         ready.write_text(sha+"\n",encoding="utf-8")
+    if run(["git","status","--porcelain","--untracked-files=normal"],MANAGED_CINEMA)!=main_status_before:
+        raise RuntimeError("main worktree changed during preview preparation; refusing admission")
     return {"path":str(directory),"head":sha,"state":"ready","ci":"verified",
             "source":"unmerged-pr-local-preview"}
 
