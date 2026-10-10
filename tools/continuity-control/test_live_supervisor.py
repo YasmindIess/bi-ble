@@ -209,7 +209,7 @@ class SupervisorSafetyTests(TestCase):
             (release/".git").write_text("gitdir: /tmp/fixture")
             (release/"userscripts"/"continuity-cinema-bridge.user.js").write_text(
                 "// ==UserScript==\\n// @version 0.7.test\\n// ==/UserScript==\\n")
-            (release/"node_modules"/".cinema-browser-ready").write_text(sha+"\\n")
+            (release/"node_modules"/".cinema-browser-ready").write_text(sha+chr(10))
             state=root/"state"/"status.json"
             calls=[]
             pr={"state":"open","merged_at":None,
