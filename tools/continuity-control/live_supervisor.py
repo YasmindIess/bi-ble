@@ -257,8 +257,8 @@ def prepare_cinema_preview():
         run(["npx","--no-install","playwright","install","chromium"],
             directory,timeout=330)
         test_script=("import {chromium} from 'playwright'; "
-                     "import fs from 'node:fs'; "
-                     "if(!fs.existsSync(chromium.executablePath()))process.exit(3)")
+                     "const browser=await chromium.launch({headless:true,args:['--no-sandbox']}); "
+                     "await browser.close();")
         run(["node","--input-type=module","-e",test_script],
             directory,timeout=18)
         ready.write_text(sha+"\n",encoding="utf-8")
@@ -283,8 +283,8 @@ def ensure_capture_runtime(directory):
     if not shutil.which("node") or not shutil.which("npm") or not shutil.which("npx"):
         return "held: required Node/npm/npx runtime unavailable"
     test_script=("import {chromium} from 'playwright'; "
-                 "import fs from 'node:fs'; "
-                 "if (!fs.existsSync(chromium.executablePath())) process.exit(3);")
+                 "const browser=await chromium.launch({headless:true,args:['--no-sandbox']}); "
+                 "await browser.close();")
     try:
         run(["node","--input-type=module","-e",test_script],directory,timeout=15)
         return "ready"
