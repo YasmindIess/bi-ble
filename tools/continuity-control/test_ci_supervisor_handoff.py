@@ -52,6 +52,27 @@ class HandoffSafetyTests(TestCase):
                 with self.assertRaisesRegex(handoff.Held,"stale"):
                     handoff.state()
 
+    def test_any_supervisor_preflight_guard_fails_closed(self):
+        import os
+        import time
+        with TemporaryDirectory() as td:
+            file=Path(td)/"status.json"
+            base={"schema":"blochfield-live-conductor-v1",
+                  "supervisor_pid":42,"cinema":"owned","vite":"owned"}
+            gates=("active_capture","runner_job_active","capture_preflight_running",
+                   "preview_preflight_running")
+            for key in gates:
+                guard={name:False for name in gates}
+                guard[key]=True
+                file.write_text(json.dumps({**base,"supervisor_restart_gate":guard}))
+                with patch.object(handoff,"STATE",file):
+                    with self.assertRaisesRegex(handoff.Held,"restart guard"):
+                        handoff.state()
+            file.write_text(json.dumps(base))
+            with patch.object(handoff,"STATE",file):
+                with self.assertRaisesRegex(handoff.Held,"restart guard"):
+                    handoff.state()
+
     def test_pending_runner_refuses_handoff_without_signalling_supervisor(self):
         status={"schema":"blochfield-live-conductor-v1","supervisor_pid":42,
                 "cinema":"owned","vite":"owned"}
