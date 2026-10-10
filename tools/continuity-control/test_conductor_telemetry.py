@@ -1,5 +1,6 @@
 """Tests: direct loopback telemetry is redacted, fresh, read-only and independent of Cinema."""
 import json
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -82,24 +83,29 @@ class IndependentObservatoryTests(TestCase):
             script = root/head/"userscripts"/"continuity-cinema-bridge.user.js"
             script.parent.mkdir(parents=True)
             script.write_text("// ==UserScript==\\n// @version 0.7.4\\n// ==/UserScript==\\n")
+            digest=hashlib.sha256(script.read_bytes()).hexdigest()
             self.assertIsNone(telemetry.verified_userscript(state, root))
             state.with_name("userscript.json").write_text(json.dumps({
                 "schema":"bxr-ci-admitted-userscript-v1",
-                "ci_admitted":True,"head":head}))
+                "ci_admitted":True,"head":head,"content_sha256":digest}))
             self.assertTrue(telemetry.verified_userscript(state,root).startswith(b"// ==UserScript=="))
+            original=script.read_bytes()
+            script.write_bytes(original+b"// tampered")
+            self.assertIsNone(telemetry.verified_userscript(state,root))
+            script.write_bytes(original)
             state.with_name("userscript.json").write_text(json.dumps({
                 "schema":"bxr-ci-admitted-userscript-v1",
-                "ci_admitted":True,"head":"../secret"}))
+                "ci_admitted":True,"head":"../secret","content_sha256":digest}))
             self.assertIsNone(telemetry.verified_userscript(state,root))
             state.with_name("userscript.json").write_text(json.dumps({
                 "schema":"bxr-ci-admitted-userscript-v1",
-                "ci_admitted":False,"head":head}))
+                "ci_admitted":False,"head":head,"content_sha256":digest}))
             self.assertIsNone(telemetry.verified_userscript(state,root))
             script.unlink()
             script.symlink_to("/etc/passwd")
             state.with_name("userscript.json").write_text(json.dumps({
                 "schema":"bxr-ci-admitted-userscript-v1",
-                "ci_admitted":True,"head":head}))
+                "ci_admitted":True,"head":head,"content_sha256":digest}))
             self.assertIsNone(telemetry.verified_userscript(state,root))
 
     def test_loopback_api_refuses_mutation_and_unknown_paths(self):
