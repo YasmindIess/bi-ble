@@ -112,6 +112,8 @@ def runner_busy():
 
 def state():
     if not STATE.is_file() or STATE.stat().st_size>65536:raise Held("Missing bounded conductor status")
+    if time.time()-STATE.stat().st_mtime>150:
+        raise Held("Conductor telemetry is stale; refusing to act on an old PID")
     d=json.loads(STATE.read_text())
     if d.get("schema")!="blochfield-live-conductor-v1":raise Held("Unexpected supervisor status schema")
     if d.get("cinema") not in ("owned","started") or d.get("vite") not in ("owned","started"):
@@ -190,7 +192,22 @@ def handoff(sha,apply):
         child=subprocess.Popen([sys.executable,str(source)],cwd=source.parents[2],
             stdin=subprocess.DEVNULL,stdout=stream,stderr=subprocess.STDOUT,
             env=carry,start_new_session=True,close_fds=True)
-    print("HANDOFF STARTED: isolated CI-green supervisor PID "+str(child.pid))
+    print("SUCCESSOR SPAWNED: isolated CI-green supervisor PID "+str(child.pid))
+    acknowledged=False
+    for _ in range(140):
+        if child.poll() is not None:
+            raise Held("Replacement supervisor exited; inspect protected handoff log")
+        try:
+            refreshed=state()
+            if refreshed.get("supervisor_pid")==child.pid and refreshed.get("checked_at"):
+                acknowledged=True
+                break
+        except (Held,ValueError,OSError):
+            pass
+        time.sleep(.3)
+    if not acknowledged:
+        raise Held("Replacement was spawned but did not publish a fresh heartbeat; outcome unverified")
+    print("HANDOFF VERIFIED: successor heartbeat acknowledged; protected checkout unchanged")
     print("No archive was changed, no external publication and no authority escalation was performed.")
 
 def main():
