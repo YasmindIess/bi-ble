@@ -396,22 +396,53 @@ def runner_remote_status():
         return {"state":"unverified","busy":None}
 
 
-def cinema_runner_busy():
-    """Conservatively defer supervisor self-reexec while its own CI runner is busy."""
+def local_cinema_runner_worker_active():
+    """Inspect this runner's *own* Worker binary, not arbitrary CI processes.
+
+    False means an available Linux procfs scan found no matching worker.
+    None means procfs was unreadable, so there is insufficient evidence.
+    """
+    proc=Path("/proc")
+    if not proc.is_dir():
+        return None
+    expected=CI_RUNNER / "bin" / "Runner.Worker"
+    if not expected.is_file() or expected.is_symlink():
+        return None
+    try:
+        canonical=expected.resolve(strict=True)
+        for entry in proc.iterdir():
+            if not entry.name.isdecimal():
+                continue
+            try:
+                executable=(entry / "exe").resolve(strict=True)
+            except (OSError, PermissionError):
+                continue
+            if executable == canonical:
+                return True
+        return False
+    except (OSError, PermissionError):
+        return None
+
+
+def cinema_runner_busy(connection=None):
+    """Protect active CI while avoiding an indefinite GH-API auth deadlock.
+
+    The local Runner.Worker executable proves whether this *registered runner*
+    is currently executing a job. GitHub's explicit busy=true also holds.
+    An unavailable remote API alone is never proof that a job is active.
+    """
     child=CHILDREN.get("cinema-runner")
     if not child or child.poll() is not None:
         return False
-    try:
-        registration=json.loads((CI_RUNNER / ".runner").read_text(encoding="utf-8"))
-        runner_name=registration["agentName"]
-        result=json.loads(run(["gh","api",
-            "repos/YasmindIess/continuity-cinema/actions/runners?per_page=100"],
-            CONTROL,timeout=18))
-        match=next((item for item in result.get("runners",[])
-                    if item.get("name")==runner_name),None)
-        return match is None or match.get("busy") is not False
-    except (OSError,ValueError,KeyError,RuntimeError,subprocess.TimeoutExpired):
+    connection=connection if isinstance(connection, dict) else runner_remote_status()
+    local_active=local_cinema_runner_worker_active()
+    if local_active is True or connection.get("busy") is True:
         return True
+    if local_active is False:
+        return False
+    if connection.get("busy") is False and connection.get("state")=="online":
+        return False
+    return True  # only when both local and remote observations are inconclusive
 
 
 def stop_owned(name):
@@ -597,6 +628,12 @@ def main():
                         vite = start("vite", ["pnpm", "editor:web"], BIBLE, 5173)
                     log(f"{name}: restarted after verified source update")
             actual_build=observed_cinema_build()
+            restart_guard={
+                "active_capture": busy_capture() if self_update_pending or control["state"]=="updated" else False,
+                "runner_job_active": cinema_runner_busy(runner_connection) if self_update_pending or control["state"]=="updated" else False,
+                "capture_preflight_running": capture_future is not None and not capture_future.done(),
+                "preview_preflight_running": preview_future is not None and not preview_future.done(),
+            }
             expected_head=(managed.get("head") if managed_ready else preview_admitted["head"] if preview_ready else None)
             attested_source=(actual_build.get("source_mode")==desired_mode and
                              actual_build.get("source_commit")==expected_head and
@@ -609,6 +646,8 @@ def main():
                                  for n, p in CHILDREN.items()},
                 "cinema_ci_runner": ci_runner,
                 "cinema_runner_connection": runner_connection,
+                "supervisor_restart_gate": restart_guard,
+                "supervisor_update_pending": self_update_pending or control["state"]=="updated",
                 "cinema_capture_runtime": capture_runtime,
                 "cinema_runner_launch_files_ready": all(
                     (CI_RUNNER / name).is_file()
@@ -628,12 +667,14 @@ def main():
                 "release_authorized": False, "production_deployed": False})
             self_update_pending |= control['state'] == 'updated'
             if self_update_pending:
-                if (busy_capture() or cinema_runner_busy()
-                    or (capture_future is not None and not capture_future.done())
-                    or (preview_future is not None and not preview_future.done())):
-                    log('Supervisor source updated: defer self-reexec during capture, CI, or browser provisioning')
+                reasons=tuple(key for key,active in restart_guard.items() if active)
+                if reasons:
+                    label=", ".join(reasons)
+                    if prior_messages.get("restart-gate")!=label:
+                        log("Supervisor update deferred by: "+label)
+                        prior_messages["restart-gate"]=label
                 else:
-                    log('Supervisor source updated and CI-verified: restart supervised processes and re-exec')
+                    log('Supervisor CI-gated update admitted: re-exec after stopping owned idle processes')
                     if stop_owned('cinema') and stop_owned('vite') and stop_owned('cinema-runner'):
                         os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve())])
             for _ in range(POLL):
