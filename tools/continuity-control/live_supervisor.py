@@ -276,6 +276,24 @@ def prepare_cinema_preview():
         CINEMA_RELEASES.mkdir(parents=True,exist_ok=True)
         run(["git","-c","core.hooksPath=/dev/null","worktree","add","--detach",
              str(directory),sha],MANAGED_CINEMA,timeout=85)
+    # Admission of the browser companion is independent of Chrome provisioning:
+    # a verified JS source may be installed even if capture dependencies are held.
+    if run(["git","rev-parse","HEAD"],directory)!=sha:
+        raise RuntimeError("CI-admitted userscript worktree changed revision")
+    if run(["git","status","--porcelain","--untracked-files=normal"],directory):
+        raise RuntimeError("CI-admitted userscript worktree is dirty")
+    script=directory / "userscripts" / "continuity-cinema-bridge.user.js"
+    if script.is_symlink() or not script.is_file():
+        raise RuntimeError("preview userscript absent or symlink")
+    if script.stat().st_size > 220000 or not script.read_bytes().startswith(b"// ==UserScript=="):
+        raise RuntimeError("preview userscript invalid or oversized")
+    STATE.parent.mkdir(parents=True,exist_ok=True)
+    manifest=STATE.with_name("userscript.json")
+    temp=manifest.with_name(".userscript-"+str(os.getpid())+".tmp")
+    temp.write_text(json.dumps({"schema":"bxr-ci-admitted-userscript-v1",
+        "ci_admitted":True,"head":sha,"branch":CINEMA_PREVIEW_BRANCH}),encoding="utf-8")
+    temp.chmod(0o600)
+    temp.replace(manifest)
     if not ready.is_file() or ready.read_text(encoding="utf-8").strip()!=sha:
         run(["npm","ci","--ignore-scripts","--no-audit","--no-fund"],
             directory,timeout=220)
