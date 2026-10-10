@@ -73,6 +73,35 @@ class IndependentObservatoryTests(TestCase):
             p.write_text(json.dumps(self.sample()))
             self.assertEqual(telemetry.read_status(p)["cinema"], "owned")
 
+    def test_pinned_private_userscript_requires_exact_admission(self):
+        with TemporaryDirectory() as td:
+            base = Path(td)
+            state = base/"status.json"
+            root = base/"previews"
+            head = "a"*40
+            script = root/head/"userscripts"/"continuity-cinema-bridge.user.js"
+            script.parent.mkdir(parents=True)
+            script.write_text("// ==UserScript==\\n// @version 0.7.4\\n// ==/UserScript==\\n")
+            self.assertIsNone(telemetry.verified_userscript(state, root))
+            state.with_name("userscript.json").write_text(json.dumps({
+                "schema":"bxr-ci-admitted-userscript-v1",
+                "ci_admitted":True,"head":head}))
+            self.assertTrue(telemetry.verified_userscript(state,root).startswith(b"// ==UserScript=="))
+            state.with_name("userscript.json").write_text(json.dumps({
+                "schema":"bxr-ci-admitted-userscript-v1",
+                "ci_admitted":True,"head":"../secret"}))
+            self.assertIsNone(telemetry.verified_userscript(state,root))
+            state.with_name("userscript.json").write_text(json.dumps({
+                "schema":"bxr-ci-admitted-userscript-v1",
+                "ci_admitted":False,"head":head}))
+            self.assertIsNone(telemetry.verified_userscript(state,root))
+            script.unlink()
+            script.symlink_to("/etc/passwd")
+            state.with_name("userscript.json").write_text(json.dumps({
+                "schema":"bxr-ci-admitted-userscript-v1",
+                "ci_admitted":True,"head":head}))
+            self.assertIsNone(telemetry.verified_userscript(state,root))
+
     def test_loopback_api_refuses_mutation_and_unknown_paths(self):
         with TemporaryDirectory() as td:
             p = Path(td)/"status.json"
