@@ -40,6 +40,18 @@ class HandoffSafetyTests(TestCase):
                 with self.assertRaises(handoff.Held):
                     handoff.ensure_idle()
 
+    def test_stale_status_rejected_before_process_signalling(self):
+        import os
+        import time
+        with TemporaryDirectory() as td:
+            file=Path(td)/"status.json"
+            file.write_text(json.dumps({"schema":"blochfield-live-conductor-v1",
+                "supervisor_pid":42,"cinema":"owned","vite":"owned"}))
+            os.utime(file,(time.time()-500,time.time()-500))
+            with patch.object(handoff,"STATE",file):
+                with self.assertRaisesRegex(handoff.Held,"stale"):
+                    handoff.state()
+
     def test_pending_runner_refuses_handoff_without_signalling_supervisor(self):
         status={"schema":"blochfield-live-conductor-v1","supervisor_pid":42,
                 "cinema":"owned","vite":"owned"}
