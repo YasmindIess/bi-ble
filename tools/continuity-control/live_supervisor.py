@@ -3,6 +3,7 @@
 import json
 import os
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import shutil
 import signal
@@ -352,6 +353,8 @@ def main():
     prior_messages = {}
     capture_runtime=None
     last_capture_check=0.0
+    capture_executor=ThreadPoolExecutor(max_workers=1,thread_name_prefix="cinema-capture-preflight")
+    capture_future=None
     try:
         while not STOP:
             repos = [synchronize(*p) for p in REPOS]
@@ -389,12 +392,24 @@ def main():
             cinema_env = {"CINEMA_CAPTURES_DIR": str(CINEMA / "captures")} if managed_ready else {}
             if managed_ready:
                 capture_runtime="ready: managed CI-admitted checkout"
-            elif time.monotonic()-last_capture_check > (300 if capture_runtime=="ready" else 45):
-                capture_runtime=ensure_capture_runtime(CINEMA)
-                last_capture_check=time.monotonic()
-                if prior_messages.get("capture-runtime")!=capture_runtime:
-                    log("capture runtime: "+capture_runtime)
-                    prior_messages["capture-runtime"]=capture_runtime
+            elif capture_future is not None:
+                if capture_future.done():
+                    try:
+                        capture_runtime=capture_future.result()
+                    except Exception as exc:
+                        capture_runtime="held: unexpected capture preflight error: "+str(exc)[:120]
+                    capture_future=None
+                    last_capture_check=time.monotonic()
+                else:
+                    capture_runtime="checking: pinned Playwright and Chromium"
+            elif time.monotonic()-last_capture_check > (300 if capture_runtime and
+                    (capture_runtime.startswith("held") or capture_runtime=="ready") else 45):
+                # Slow npm/browser downloads run outside the conductor's poll loop.
+                capture_future=capture_executor.submit(ensure_capture_runtime,CINEMA)
+                capture_runtime="checking: pinned Playwright and Chromium"
+            if prior_messages.get("capture-runtime") != capture_runtime:
+                log("capture runtime: "+str(capture_runtime))
+                prior_messages["capture-runtime"]=capture_runtime
             pending["vite"] |= repos[0]["state"] == "updated"
             cinema = start("cinema", ["bash", "./run-local.sh"], cinema_dir, 8765, cinema_env)
             if cinema == "started":
@@ -435,8 +450,8 @@ def main():
                 "release_authorized": False, "production_deployed": False})
             self_update_pending |= control['state'] == 'updated'
             if self_update_pending:
-                if busy_capture() or cinema_runner_busy():
-                    log('Supervisor source updated: postpone self-reexec while capture or Cinema CI is busy')
+                if busy_capture() or cinema_runner_busy() or (capture_future is not None and not capture_future.done()):
+                    log('Supervisor source updated: defer self-reexec during capture, CI, or browser provisioning')
                 else:
                     log('Supervisor source updated and CI-verified: restart supervised processes and re-exec')
                     if stop_owned('cinema') and stop_owned('vite') and stop_owned('cinema-runner'):
@@ -446,6 +461,7 @@ def main():
                     break
                 time.sleep(1)
     finally:
+        capture_executor.shutdown(wait=False,cancel_futures=True)
         for name in ("cinema", "vite", "cinema-runner"):
             stop_owned(name)
         log("Third runtime stopped; evidence and external services untouched")
