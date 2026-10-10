@@ -422,7 +422,7 @@ def local_cinema_runner_worker_active(proc=None):
             # Some runner distributions launch a .NET host instead of the apphost.
             # Match only a Worker argv whose path resolves *inside this runner*.
             try:
-                raw=(entry / "cmdline").read_bytes().split(b"\\x00")
+                raw=(entry / "cmdline").read_bytes().split(b"\x00")
                 argv=raw[0].decode("utf-8",errors="replace") if raw else ""
                 if Path(argv).name != "Runner.Worker":
                     continue
