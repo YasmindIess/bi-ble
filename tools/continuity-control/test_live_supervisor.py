@@ -176,6 +176,34 @@ class SupervisorSafetyTests(TestCase):
             self.assertTrue(any(cmd[:2]==["gh","api"] for cmd in calls))
             self.assertFalse(any("fetch" in cmd or "npm" in cmd for cmd in calls))
 
+    def test_real_http_build_identity_not_inferred_from_source_checkout(self):
+        from types import SimpleNamespace
+        class Payload:
+            def __enter__(self): return self
+            def __exit__(self,*_): return False
+        class Build(Payload):
+            def __init__(self,raw): self.raw=raw
+            def read(self): return self.raw.encode()
+        correct=('{"schema":"cinema-live-build-v1","version":"0.7.0",'
+                 '"source_mode":"github-preview","source_commit":"'+("a"*40)+'",'
+                 '"userscript_served":true}')
+        with patch.object(mod.urllib.request,"urlopen",return_value=Build(correct)):
+            observed=mod.observed_cinema_build()
+        self.assertEqual(observed["state"],"verified")
+        self.assertEqual(observed["source_mode"],"github-preview")
+        self.assertEqual(observed["source_commit"],"a"*40)
+        wrong='{"schema":"cinema-live-build-v1","version":"0.7.0","source_mode":"github-preview","source_commit":null,"userscript_served":true}'
+        with patch.object(mod.urllib.request,"urlopen",return_value=Build(wrong)):
+            self.assertEqual(mod.observed_cinema_build()["state"],"unverified")
+
+    def test_old_cinema_route_404_proves_no_new_userscript_route(self):
+        from urllib.error import HTTPError
+        with patch.object(mod.urllib.request,"urlopen",
+                          side_effect=HTTPError("http://127.0.0.1:8765/api/build",404,"not found",{},None)):
+            result=mod.observed_cinema_build()
+        self.assertEqual(result["state"],"legacy-route-missing")
+        self.assertEqual(result["source_mode"],"legacy")
+
     def test_missing_exact_head_ci_fails_closed(self):
         with patch.object(mod.shutil, "which", return_value="/usr/bin/gh"), \
              patch.object(mod, "run", return_value='{"workflow_runs": []}'):
