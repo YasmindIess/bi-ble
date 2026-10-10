@@ -194,6 +194,57 @@ class SupervisorSafetyTests(TestCase):
         with self.assertRaisesRegex(RuntimeError,"preview branch or base"):
             mod.admitted_preview_head(redirected)
 
+    def test_dirty_main_is_preserved_during_isolated_green_preview_preparation(self):
+        with TemporaryDirectory() as td:
+            root=Path(td)
+            sha="c"*40
+            main=root/"cinema-main"
+            (main/".git").mkdir(parents=True)
+            user_edit=main/"user-changes.txt"
+            user_edit.write_text("USER WORK MUST REMAIN")
+            release=root/"previews"/sha
+            (release/"userscripts").mkdir(parents=True)
+            (release/"node_modules").mkdir()
+            (release/".git").write_text("gitdir: /tmp/fixture")
+            (release/"userscripts"/"continuity-cinema-bridge.user.js").write_text(
+                "// ==UserScript==\\n// @version 0.7.test\\n// ==/UserScript==\\n")
+            (release/"node_modules"/".cinema-browser-ready").write_text(sha+"\\n")
+            state=root/"state"/"status.json"
+            calls=[]
+            pr={"state":"open","merged_at":None,
+                "head":{"sha":sha,"ref":mod.CINEMA_PREVIEW_BRANCH,
+                        "repo":{"full_name":mod.CINEMA_REPO}},
+                "base":{"ref":"main","repo":{"full_name":mod.CINEMA_REPO}}}
+            def fake_run(cmd,cwd,timeout=35):
+                calls.append((cmd,str(cwd)))
+                if cmd[1:4]==["remote","get-url","origin"]:
+                    return "https://github.com/YasmindIess/continuity-cinema.git"
+                if cmd[1:3]==["branch","--show-current"]:return "main"
+                if cmd[1:3]==["status","--porcelain"]:
+                    return " M user-changes.txt" if Path(cwd)==main else ""
+                if cmd[:2]==["gh","api"]:return json.dumps(pr)
+                if "fetch" in cmd or cmd[1:3]==["merge-base","--is-ancestor"]:
+                    return ""
+                if cmd[1:3]==["rev-parse","FETCH_HEAD"]:return sha
+                if cmd[1:3]==["rev-parse","refs/heads/main"]:return "a"*40
+                if cmd[1:3]==["rev-parse","HEAD"]:return sha
+                raise AssertionError("unexpected command "+str(cmd))
+            with patch.object(mod,"MANAGED_CINEMA",main), \
+                 patch.object(mod,"CINEMA_RELEASES",root/"previews"), \
+                 patch.object(mod,"STATE",state), \
+                 patch.object(mod,"CONTROL",root), \
+                 patch.object(mod,"run",side_effect=fake_run), \
+                 patch.object(mod,"exact_ci",return_value=1):
+                preview=mod.prepare_cinema_preview()
+            self.assertEqual(preview["head"],sha)
+            self.assertEqual(preview["state"],"ready")
+            self.assertEqual(user_edit.read_text(),"USER WORK MUST REMAIN")
+            self.assertFalse(any("reset" in cmd or "stash" in cmd or "merge"==cmd[1]
+                                 for cmd,_ in calls))
+            admission=json.loads(state.with_name("userscript.json").read_text())
+            self.assertEqual(admission["head"],sha)
+            self.assertEqual(len(admission["content_sha256"]),64)
+
     def test_preview_fetch_never_precedes_exact_head_ci(self):
         # A missing / non-green exact-head CI must be held before Git or npm mutation.
         with TemporaryDirectory() as td:
